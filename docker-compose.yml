@@ -1,8 +1,8 @@
 services:
-  domainchief-ddns:
+  etf-multiddns:
     # Default: use the pre-built image from the GitHub Container Registry
     # (built by the release workflow under .github/workflows/release.yml).
-    image: ghcr.io/eitifuzzi/domainchief-ddns:latest
+    image: ghcr.io/eitifuzzi/etf-multiddns:latest
     # For local development, replace the line above with the next one instead
     # (builds from the local source code instead of pulling the image):
     # build: .
@@ -10,7 +10,7 @@ services:
     # may not exist or may be outdated (relevant for Portainer, which
     # otherwise doesn't automatically re-pull on a stack update).
     pull_policy: always
-    container_name: domainchief-ddns
+    container_name: etf-multiddns
     restart: unless-stopped
     ports:
       - "8080:8080"

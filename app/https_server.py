@@ -31,7 +31,7 @@ from werkzeug.serving import make_server
 
 from . import tls
 
-logger = logging.getLogger("domainchief.https")
+logger = logging.getLogger("etfmultiddns.https")
 
 DEFAULT_HTTPS_PORT = 8443
 

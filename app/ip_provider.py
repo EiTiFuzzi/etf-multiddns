@@ -11,7 +11,7 @@ from typing import Optional
 
 import requests
 
-logger = logging.getLogger("domainchief.ip")
+logger = logging.getLogger("etfmultiddns.ip")
 
 DEFAULT_IPV4_PROVIDERS = [
     "https://api.ipify.org",

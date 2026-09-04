@@ -1,6 +1,6 @@
 **English** | [Deutsch](LIESMICH.md)
 
-# Domain Chief DDNS
+# ETF-MultiDDNS
 
 A small Docker container that automatically updates A/AAAA records at [Domain Chief](https://domain.chief.app)
 to your current public IP address - similar to
@@ -51,14 +51,14 @@ and survives container restarts, since the folder is mounted as a volume.
 
 ```bash
 docker run -d \
-  --name domainchief-ddns \
+  --name etf-multiddns \
   --restart unless-stopped \
   -p 8080:8080 \
   -p 8443:8443 \
   -e DOMAINCHIEF_API_TOKEN=ctp_your_token \
   -e CHECK_INTERVAL=300 \
   -v $(pwd)/config:/config \
-  ghcr.io/<your-github-name-lowercased>/domainchief-ddns:latest
+  ghcr.io/<your-github-name-lowercased>/etf-multiddns:latest
 ```
 
 (Drop the `-p 8443:8443` line if you don't plan on enabling HTTPS and don't want the port exposed.)
@@ -156,10 +156,10 @@ existing Web UI credentials.
 ### Via the CLI (e.g. if you don't want a Web UI)
 
 ```bash
-docker exec -it domainchief-ddns python -m app.cli list
-docker exec -it domainchief-ddns python -m app.cli add --domain example.com --name home --type A --ttl 300
-docker exec -it domainchief-ddns python -m app.cli remove <record-id>
-docker exec -it domainchief-ddns python -m app.cli sync
+docker exec -it etf-multiddns python -m app.cli list
+docker exec -it etf-multiddns python -m app.cli add --domain example.com --name home --type A --ttl 300
+docker exec -it etf-multiddns python -m app.cli remove <record-id>
+docker exec -it etf-multiddns python -m app.cli sync
 ```
 
 ## How it works

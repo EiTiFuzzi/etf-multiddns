@@ -21,7 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-logger = logging.getLogger("domainchief.config")
+logger = logging.getLogger("etfmultiddns.config")
 
 CONFIG_PATH = Path(os.environ.get("CONFIG_PATH", "/config/config.json"))
 
@@ -188,7 +188,7 @@ def _merge_defaults(data: dict) -> dict:
         record.setdefault("id", uuid.uuid4().hex[:12])
         record.setdefault("ttl", 300)
         record.setdefault("enabled", True)
-        record.setdefault("comment", "Managed by domainchief-ddns")
+        record.setdefault("comment", "Managed by etf-multiddns")
         record.setdefault("last_ip", None)
         record.setdefault("last_sync_at", None)
         record.setdefault("last_status", "pending")
@@ -267,7 +267,7 @@ def add_record(config: dict, domain: str, name: str, record_type: str, ttl: int 
         "type": record_type.upper(),
         "ttl": int(ttl),
         "enabled": True,
-        "comment": comment or "Managed by domainchief-ddns",
+        "comment": comment or "Managed by etf-multiddns",
         "last_ip": None,
         "last_sync_at": None,
         "last_status": "pending",
@@ -312,7 +312,7 @@ def update_record(
     record["name"] = name
     record["type"] = record_type
     record["ttl"] = int(ttl)
-    record["comment"] = comment or "Managed by domainchief-ddns"
+    record["comment"] = comment or "Managed by etf-multiddns"
     if identity_changed:
         record["dns_record_id"] = None
         record["last_ip"] = None

@@ -16,7 +16,7 @@ from typing import Any, Optional
 
 import requests
 
-logger = logging.getLogger("domainchief.client")
+logger = logging.getLogger("etfmultiddns.client")
 
 API_BASE_URL = "https://domain.chief.app/api/v1"
 

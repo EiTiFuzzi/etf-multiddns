@@ -17,7 +17,7 @@ LANGUAGE_LABELS = {"de": "Deutsch", "en": "English"}
 
 TRANSLATIONS: dict[str, dict[str, str]] = {
     "de": {
-        "brand": "Domain Chief DDNS",
+        "brand": "ETF-MultiDDNS",
         "nav.menu": "Menü",
         "nav.pin": "Menü fixieren",
         "nav.dashboard": "Dashboard",
@@ -243,7 +243,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "setup.error_short": "Das Passwort sollte mindestens 8 Zeichen lang sein.",
     },
     "en": {
-        "brand": "Domain Chief DDNS",
+        "brand": "ETF-MultiDDNS",
         "nav.menu": "Menu",
         "nav.pin": "Pin menu",
         "nav.dashboard": "Dashboard",

@@ -30,9 +30,9 @@ def generate_secret() -> str:
     return pyotp.random_base32()
 
 
-def provisioning_uri(secret: str, username: str, issuer: str = "Domain Chief DDNS") -> str:
+def provisioning_uri(secret: str, username: str, issuer: str = "ETF-MultiDDNS") -> str:
     """otpauth:// URI encoded into the setup QR code - this is what makes an
-    authenticator app show "Domain Chief DDNS (username)" instead of a bare
+    authenticator app show "ETF-MultiDDNS (username)" instead of a bare
     secret."""
     return pyotp.TOTP(secret).provisioning_uri(name=username or "admin", issuer_name=issuer)
 

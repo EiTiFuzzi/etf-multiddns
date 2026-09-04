@@ -1,10 +1,10 @@
 """
 Optionales CLI fuer den Container, z.B. via:
 
-  docker exec -it domainchief-ddns python -m app.cli list
-  docker exec -it domainchief-ddns python -m app.cli add --domain beispiel.at --name home --type A
-  docker exec -it domainchief-ddns python -m app.cli remove <record-id>
-  docker exec -it domainchief-ddns python -m app.cli sync
+  docker exec -it etf-multiddns python -m app.cli list
+  docker exec -it etf-multiddns python -m app.cli add --domain beispiel.at --name home --type A
+  docker exec -it etf-multiddns python -m app.cli remove <record-id>
+  docker exec -it etf-multiddns python -m app.cli sync
 
 Nuetzlich, wenn man die Records nicht ueber das Web-UI, sondern per Skript /
 SSH verwalten moechte.
@@ -23,7 +23,7 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(messag
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="domainchief-ddns")
+    parser = argparse.ArgumentParser(prog="etf-multiddns")
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("list", help="Alle konfigurierten Records anzeigen")
@@ -33,7 +33,7 @@ def main() -> int:
     add_p.add_argument("--name", default="", help="Subdomain, leer = Root-Domain")
     add_p.add_argument("--type", choices=["A", "AAAA"], default="A")
     add_p.add_argument("--ttl", type=int, default=300)
-    add_p.add_argument("--comment", default="Managed by domainchief-ddns")
+    add_p.add_argument("--comment", default="Managed by etf-multiddns")
 
     remove_p = sub.add_parser("remove", help="Record entfernen (lokal + bei Domain Chief)")
     remove_p.add_argument("record_id")

@@ -1,5 +1,5 @@
 """
-Small Flask Web UI for the domainchief-ddns container.
+Small Flask Web UI for the etf-multiddns container.
 
 Shows the current sync status, allows creating/deleting managed records as
 well as changing the settings (API token, team ID, interval, Web UI
@@ -26,7 +26,7 @@ from ..domainchief_client import DomainChiefClient, DomainChiefError
 from ..https_server import HttpsServerManager, https_port
 from .i18n import DEFAULT_LANG, LANGUAGES, LANGUAGE_LABELS, translator
 
-logger = logging.getLogger("domainchief.web")
+logger = logging.getLogger("etfmultiddns.web")
 
 LANG_COOKIE = "lang"
 LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year

@@ -44,7 +44,7 @@ jobs:
 
       - name: Lowercase the repository name
         # Docker/OCI image names must be entirely lowercase, but a GitHub
-        # username/repo (e.g. "SomeUser/DomainChief-DDNS") is allowed to
+        # username/repo (e.g. "SomeUser/ETF-MultiDDNS") is allowed to
         # contain mixed case. Without this step, the push would fail with
         # "invalid reference format" as soon as the GitHub user or repo name
         # contains uppercase letters.

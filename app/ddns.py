@@ -1,6 +1,6 @@
 """
 Core logic: periodic synchronization of the configured DNS records with the
-current public IP address (Dynamic DNS for Domain Chief).
+current public IP address (Dynamic DNS for Domain Chief, part of ETF-MultiDDNS).
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from . import config as config_module
 from .domainchief_client import DomainChiefClient, DomainChiefError, DomainChiefRateLimitError
 from .ip_provider import get_public_ipv4, get_public_ipv6
 
-logger = logging.getLogger("domainchief.ddns")
+logger = logging.getLogger("etfmultiddns.ddns")
 
 
 def _now_iso() -> str:
@@ -86,7 +86,7 @@ class DDNSService:
 
         handler = BufferLogHandler(self.log_buffer)
         handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
-        logging.getLogger("domainchief").addHandler(handler)
+        logging.getLogger("etfmultiddns").addHandler(handler)
 
     # ------------------------------------------------------------------
     def _client(self) -> DomainChiefClient:

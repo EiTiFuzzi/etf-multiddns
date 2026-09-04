@@ -12,7 +12,7 @@
       "type": "A",
       "ttl": 300,
       "enabled": true,
-      "comment": "Managed by domainchief-ddns",
+      "comment": "Managed by etf-multiddns",
       "last_ip": null,
       "last_sync_at": null,
       "last_status": "pending",

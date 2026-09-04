@@ -29,7 +29,7 @@ from cryptography.x509.oid import NameOID
 
 from . import config as config_module
 
-logger = logging.getLogger("domainchief.tls")
+logger = logging.getLogger("etfmultiddns.tls")
 
 SELF_SIGNED_CERT = config_module.CERT_DIR / "selfsigned.crt"
 SELF_SIGNED_KEY = config_module.CERT_DIR / "selfsigned.key"
@@ -68,7 +68,7 @@ def generate_self_signed(hostname: str, cert_path: Path = SELF_SIGNED_CERT, key_
     always included so the dashboard stays reachable that way too."""
     key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
-    common_name = (hostname or "").strip() or "domainchief-ddns"
+    common_name = (hostname or "").strip() or "etf-multiddns"
     subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, common_name)])
 
     sans: list[x509.GeneralName] = []
