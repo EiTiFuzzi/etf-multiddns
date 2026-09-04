@@ -1,5 +1,9 @@
 [English](README.md) | **Deutsch**
 
+<p align="center">
+  <img src="docs/logo.png" alt="ETF-MultiDDNS Logo" width="480">
+</p>
+
 # ETF-MultiDDNS
 
 Ein kleiner Docker-Container, der A/AAAA-Records bei [Domain Chief](https://domain.chief.app)

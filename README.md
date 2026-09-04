@@ -1,5 +1,9 @@
 **English** | [Deutsch](LIESMICH.md)
 
+<p align="center">
+  <img src="docs/logo.png" alt="ETF-MultiDDNS logo" width="480">
+</p>
+
 # ETF-MultiDDNS
 
 A small Docker container that automatically updates A/AAAA records at [Domain Chief](https://domain.chief.app)
