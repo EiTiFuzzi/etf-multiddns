@@ -1,0 +1,38 @@
+services:
+  etf-multiddns:
+    # Default: use the pre-built image from the GitHub Container Registry
+    # (built by the release workflow under .github/workflows/release.yml).
+    image: ghcr.io/eitifuzzi/etf-multiddns:latest
+    # For local development, replace the line above with the next one instead
+    # (builds from the local source code instead of pulling the image):
+    # build: .
+    # Forces a fresh pull on every deploy, instead of using a local image that
+    # may not exist or may be outdated (relevant for Portainer, which
+    # otherwise doesn't automatically re-pull on a stack update).
+    pull_policy: always
+    container_name: etf-multiddns
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      # HTTPS: only actually answers once enabled under Settings (Web UI),
+      # self-signed by default. Remove this line if you don't want the port
+      # exposed on the host at all.
+      - "8443:8443"
+    environment:
+      # Optional: can also be set conveniently in the Web UI under "Settings".
+      # If set here, they override the Web UI settings (and those fields are
+      # then disabled).
+      - DOMAINCHIEF_API_TOKEN=${DOMAINCHIEF_API_TOKEN:-}
+      - DOMAINCHIEF_TEAM_ID=${DOMAINCHIEF_TEAM_ID:-}
+      - CHECK_INTERVAL=${CHECK_INTERVAL:-300}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      # Optional: IANA timezone name (e.g. "Europe/Vienna"), affects the logs
+      # and the timestamps shown in the Web UI. Empty/unset = UTC.
+      - TZ=${TZ:-}
+      # Optional: fix the Web UI login instead of using the setup wizard in
+      # the browser. If set here, the credentials can no longer be changed in
+      # the Web UI (Settings).
+      - WEBUI_USERNAME=${WEBUI_USERNAME:-}
+      - WEBUI_PASSWORD=${WEBUI_PASSWORD:-}
+    volumes:
+      - ./config:/config

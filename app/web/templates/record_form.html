@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}{{ (t('edit_record.title') if record else t('new_record.title')) }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('edit_record.title') if record else t('new_record.title') }}</h1>
+
+  {% if error %}
+    <div class="alert alert-error">{{ t('new_record.domains_error') }} {{ error }}</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('edit_record', record_id=record.id) if record else url_for('create_record') }}" class="form">
+    <label>
+      {{ t('new_record.label_domain') }}
+      {% if record %}
+        <input type="text" value="{{ record.domain }}" disabled>
+      {% elif domains %}
+        <select name="domain" required>
+          <option value="" disabled selected>{{ t('new_record.domain_placeholder') }}</option>
+          {% for d in domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+      {% else %}
+        <input type="text" name="domain" placeholder="beispiel.at" required>
+      {% endif %}
+    </label>
+
+    <label>
+      {{ t('new_record.label_subdomain') }}
+      {% if record %}
+        <input type="text" value="{{ record.name }}" disabled>
+      {% else %}
+        <input type="text" name="name" value="" placeholder="home">
+      {% endif %}
+    </label>
+
+    <label>
+      {{ t('new_record.label_type') }}
+      <select name="type">
+        <option value="A" {{ 'selected' if not record or record.type == 'A' else '' }}>A (IPv4)</option>
+        <option value="AAAA" {{ 'selected' if record and record.type == 'AAAA' else '' }}>AAAA (IPv6)</option>
+      </select>
+    </label>
+
+    <label>
+      {{ t('new_record.label_ttl') }}
+      <input type="number" name="ttl" value="{{ record.ttl if record else 300 }}" min="60" max="2592000">
+    </label>
+
+    <label>
+      {{ t('new_record.label_comment') }}
+      <input type="text" name="comment" value="{{ record.comment if record else 'Managed by etf-multiddns' }}">
+    </label>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('edit_record.btn_save') if record else t('new_record.btn_create') }}</button>
+      <a href="{{ url_for('index') }}" class="btn">{{ t('new_record.btn_cancel') }}</a>
+    </div>
+  </form>
+
+  <p class="hint">{{ t('edit_record.hint') if record else t('new_record.hint') }}</p>
+{% endblock %}

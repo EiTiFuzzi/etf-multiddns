@@ -1,0 +1,28 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('setup.title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('setup.title') }}</h1>
+  <p class="hint">{{ t('setup.intro') }}</p>
+
+  {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" class="form">
+    <label>
+      {{ t('setup.label_username') }}
+      <input type="text" name="username" autocomplete="username" autofocus required>
+    </label>
+    <label>
+      {{ t('setup.label_password') }}
+      <input type="password" name="password" autocomplete="new-password" minlength="8" required>
+    </label>
+    <label>
+      {{ t('setup.label_password2') }}
+      <input type="password" name="password2" autocomplete="new-password" minlength="8" required>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('setup.btn') }}</button>
+    </div>
+  </form>
+{% endblock %}

@@ -1,0 +1,7 @@
+{% extends "base.html" %}
+{% block title %}{{ t('logs.title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('logs.title') }}</h1>
+  <pre class="logs">{% for line in lines %}{{ line }}
+{% endfor %}</pre>
+{% endblock %}

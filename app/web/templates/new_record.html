@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ t('new_record.title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('new_record.title') }}</h1>
+
+  {% if error %}
+    <div class="alert alert-error">{{ t('new_record.domains_error') }} {{ error }}</div>
+  {% endif %}
+
+  <form method="post" class="form">
+    <label>
+      {{ t('new_record.label_domain') }}
+      {% if domains %}
+        <select name="domain" required>
+          <option value="" disabled selected>{{ t('new_record.domain_placeholder') }}</option>
+          {% for d in domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+      {% else %}
+        <input type="text" name="domain" placeholder="beispiel.at" required>
+      {% endif %}
+    </label>
+
+    <label>
+      {{ t('new_record.label_subdomain') }}
+      <input type="text" name="name" placeholder="home">
+    </label>
+
+    <label>
+      {{ t('new_record.label_type') }}
+      <select name="type">
+        <option value="A">A (IPv4)</option>
+        <option value="AAAA">AAAA (IPv6)</option>
+      </select>
+    </label>
+
+    <label>
+      {{ t('new_record.label_ttl') }}
+      <input type="number" name="ttl" value="300" min="60" max="2592000">
+    </label>
+
+    <label>
+      {{ t('new_record.label_comment') }}
+      <input type="text" name="comment" value="Managed by etf-multiddns">
+    </label>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('new_record.btn_create') }}</button>
+      <a href="{{ url_for('index') }}" class="btn">{{ t('new_record.btn_cancel') }}</a>
+    </div>
+  </form>
+
+  <p class="hint">{{ t('new_record.hint') }}</p>
+{% endblock %}

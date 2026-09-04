@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+{% block title %}{{ t('settings.title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('settings.title') }}</h1>
+
+  {% if api_token_from_env %}
+    <div class="alert alert-info">{{ t('settings.env_notice') }}</div>
+  {% endif %}
+
+  <form method="post" class="form">
+    <label>
+      {{ t('settings.label_token') }}
+      <input type="password" name="api_token" placeholder="{{ t('settings.token_placeholder_set') if api_token_set else 'ctp_...' }}"
+             {{ 'disabled' if api_token_from_env else '' }}>
+    </label>
+    <p class="hint">
+      {{ t('settings.token_hint') }} <a href="https://domain.chief.app/api/token/create" target="_blank" rel="noopener">domain.chief.app/api/token/create</a>.
+      {{ t('settings.token_scopes_hint') }} <code>domainchief:dns:read</code>, <code>domainchief:dns:write</code>, <code>domainchief:domains:read</code>.
+    </p>
+
+    <label>
+      {{ t('settings.label_team') }}
+      <input type="text" name="team_id" value="{{ team_id }}" {{ 'disabled' if api_token_from_env else '' }}>
+    </label>
+
+    <label>
+      {{ t('settings.label_interval') }}
+      <input type="number" name="check_interval" value="{{ check_interval }}" min="60">
+    </label>
+
+    <label>
+      {{ t('settings.label_timezone') }}
+      <select name="timezone" {{ 'disabled' if timezone_from_env else '' }}>
+        <option value="">{{ t('settings.timezone_system_default') }}</option>
+        {% for tz in available_timezones %}
+        <option value="{{ tz }}" {{ 'selected' if tz == timezone else '' }}>{{ tz }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="hint">{{ t('settings.timezone_env_notice') if timezone_from_env else t('settings.timezone_hint') }}</p>
+
+    <label>
+      {{ t('settings.label_datetime_format') }}
+      <select name="datetime_format">
+        {% for key, example in datetime_format_examples.items() %}
+        <option value="{{ key }}" {{ 'selected' if key == datetime_format else '' }}>{{ example }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <p class="hint">{{ t('settings.datetime_format_hint') }}</p>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('settings.btn_save') }}</button>
+      <button type="button" class="btn" onclick="testConnection()">{{ t('settings.btn_test') }}</button>
+    </div>
+  </form>
+
+  <p id="test-result"></p>
+
+  <h2>{{ t('settings.webui_title') }}</h2>
+
+  {% if webui_from_env %}
+    <div class="alert alert-info">{{ t('settings.webui_env_notice') }}</div>
+  {% endif %}
+
+  {% if webui_error %}
+    <div class="alert alert-error">{{ webui_error }}</div>
+  {% endif %}
+  {% if webui_saved %}
+    <div class="alert alert-info">{{ t('settings.webui_saved') }}</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('save_webui_credentials') }}" class="form">
+    <label>
+      {{ t('settings.label_username') }}
+      <input type="text" name="username" value="{{ webui_username }}" autocomplete="username" {{ 'disabled' if webui_from_env else '' }}>
+    </label>
+    <label>
+      {{ t('settings.label_new_password') }}
+      <input type="password" name="password" autocomplete="new-password" minlength="8" {{ 'disabled' if webui_from_env else '' }}>
+    </label>
+    <label>
+      {{ t('settings.label_new_password2') }}
+      <input type="password" name="password2" autocomplete="new-password" minlength="8" {{ 'disabled' if webui_from_env else '' }}>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary" {{ 'disabled' if webui_from_env else '' }}>{{ t('settings.btn_save_webui') }}</button>
+    </div>
+  </form>
+
+  <h2>{{ t('settings.totp_title') }}</h2>
+
+  {% if totp_error %}
+    <div class="alert alert-error">{{ totp_error }}</div>
+  {% endif %}
+  {% if totp_saved %}
+    <div class="alert alert-info">{{ t('settings.totp_disabled_notice') }}</div>
+  {% endif %}
+
+  {% if totp_enabled %}
+    <div class="alert alert-info">{{ t('settings.totp_status_enabled') }}</div>
+    {% if totp_recovery_codes_remaining <= 2 %}
+      <div class="alert alert-warning">
+        {{ t('settings.totp_low_recovery_codes') }} ({{ totp_recovery_codes_remaining }})
+      </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('disable_2fa') }}" class="form"
+          onsubmit="return confirm('{{ t('settings.totp_confirm_disable') }}');">
+      <label>
+        {{ t('settings.totp_label_code_confirm') }}
+        <input type="text" name="code" autocomplete="one-time-code" required>
+      </label>
+      <div class="form-actions">
+        <button type="submit" class="btn btn-danger">{{ t('settings.totp_btn_disable') }}</button>
+      </div>
+    </form>
+
+    <form method="post" action="{{ url_for('regenerate_recovery_codes') }}" class="form-actions"
+          onsubmit="return confirm('{{ t('settings.totp_confirm_regenerate') }}');">
+      <button type="submit" class="btn">{{ t('settings.totp_btn_regenerate_recovery') }}</button>
+    </form>
+  {% else %}
+    <p class="hint">{{ t('settings.totp_intro') }}</p>
+    <div class="form-actions">
+      <a href="{{ url_for('setup_2fa_form') }}" class="btn btn-primary">{{ t('settings.totp_btn_enable') }}</a>
+    </div>
+  {% endif %}
+
+  <h2>{{ t('settings.https_title') }}</h2>
+  <p class="hint">{{ t('settings.https_intro') }} {{ https_port }}</p>
+
+  {% if https_error %}
+    <div class="alert alert-error">{{ https_error }}</div>
+  {% endif %}
+  {% if https_saved %}
+    <div class="alert alert-info">{{ t('settings.https_saved') }}</div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('save_https_settings') }}" class="form">
+    <label class="form-checkbox">
+      <input type="checkbox" name="https_enabled" {{ 'checked' if https_enabled else '' }}>
+      {{ t('settings.https_enable') }}
+    </label>
+    <p class="hint">{{ t('settings.https_warning') }}</p>
+
+    <label>
+      {{ t('settings.https_cert_source') }}
+      <select name="https_cert_source">
+        <option value="self_signed" {{ 'selected' if https_cert_source == 'self_signed' else '' }}>{{ t('settings.https_source_self_signed') }}</option>
+        <option value="custom" {{ 'selected' if https_cert_source == 'custom' else '' }}>{{ t('settings.https_source_custom') }}</option>
+      </select>
+    </label>
+
+    <label>
+      {{ t('settings.https_hostname_label') }}
+      <input type="text" name="https_cert_hostname" value="{{ https_cert_hostname }}" placeholder="e.g. ddns.example.com">
+    </label>
+    <p class="hint">{{ t('settings.https_hostname_hint') }}</p>
+
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('settings.btn_save') }}</button>
+    </div>
+  </form>
+
+  <h3>{{ t('settings.https_selfsigned_heading') }}</h3>
+  {% if self_signed_cert_info %}
+    <p class="cert-info">
+      <strong>{{ t('settings.https_cert_subject') }}</strong> {{ self_signed_cert_info.common_name }}<br>
+      <strong>{{ t('settings.https_cert_valid_until') }}</strong> {{ self_signed_cert_info.valid_until }}
+    </p>
+  {% else %}
+    <p class="hint">{{ t('settings.https_cert_none') }}</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('regenerate_https_cert') }}" class="form-actions">
+    <button type="submit" class="btn">{{ t('settings.https_btn_regenerate') }}</button>
+  </form>
+
+  <h3>{{ t('settings.https_custom_title') }}</h3>
+  <p class="hint">{{ t('settings.https_custom_hint') }}</p>
+  {% if custom_cert_info %}
+    <p class="cert-info">
+      <strong>{{ t('settings.https_cert_subject') }}</strong> {{ custom_cert_info.common_name }}<br>
+      <strong>{{ t('settings.https_cert_valid_until') }}</strong> {{ custom_cert_info.valid_until }}
+    </p>
+  {% else %}
+    <p class="hint">{{ t('settings.https_no_custom_cert') }}</p>
+  {% endif %}
+  <form method="post" action="{{ url_for('upload_https_cert') }}" enctype="multipart/form-data" class="form">
+    <div>
+      <span class="file-field-label">{{ t('settings.https_upload_cert_label') }}</span>
+      <div class="file-input">
+        <label class="btn file-input-trigger" for="cert_file_input">{{ t('settings.https_choose_file') }}</label>
+        <input type="file" id="cert_file_input" name="cert_file" accept=".pem,.crt,.cer" class="file-input-hidden"
+               onchange="dcUpdateFileName(this, 'cert_file_name')">
+        <span id="cert_file_name" class="file-input-name" data-empty-text="{{ t('settings.https_no_file_chosen') }}">{{ t('settings.https_no_file_chosen') }}</span>
+      </div>
+    </div>
+    <div>
+      <span class="file-field-label">{{ t('settings.https_upload_key_label') }}</span>
+      <div class="file-input">
+        <label class="btn file-input-trigger" for="key_file_input">{{ t('settings.https_choose_file') }}</label>
+        <input type="file" id="key_file_input" name="key_file" accept=".pem,.key" class="file-input-hidden"
+               onchange="dcUpdateFileName(this, 'key_file_name')">
+        <span id="key_file_name" class="file-input-name" data-empty-text="{{ t('settings.https_no_file_chosen') }}">{{ t('settings.https_no_file_chosen') }}</span>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('settings.https_btn_upload') }}</button>
+      {% if has_custom_cert %}
+      <button type="submit" formaction="{{ url_for('remove_https_custom_cert') }}" class="btn btn-danger">{{ t('settings.https_btn_remove_custom') }}</button>
+      {% endif %}
+    </div>
+  </form>
+
+  <script>
+    async function testConnection() {
+      const resultEl = document.getElementById('test-result');
+      resultEl.textContent = '{{ t("settings.testing") }}';
+      const res = await fetch("{{ url_for('test_connection') }}", { method: 'POST' });
+      const data = await res.json();
+      resultEl.textContent = data.message;
+      resultEl.className = data.ok ? 'alert alert-info' : 'alert alert-error';
+    }
+
+    // The native file input's own button/placeholder text ("Choose File" /
+    // "No file chosen") is rendered by the browser in ITS OWN UI language,
+    // ignoring this page's language entirely - so it stayed German even
+    // with English selected. Fixed by hiding the native input and driving
+    // our own label + filename text (already translated server-side) from
+    // its change event instead.
+    function dcUpdateFileName(input, nameElId) {
+      const nameEl = document.getElementById(nameElId);
+      nameEl.textContent = input.files && input.files.length ? input.files[0].name : nameEl.dataset.emptyText;
+    }
+  </script>
+{% endblock %}

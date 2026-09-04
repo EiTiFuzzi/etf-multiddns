@@ -1,0 +1,162 @@
+{% extends "base.html" %}
+{% block title %}{{ t('dashboard.title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('dashboard.title') }}</h1>
+
+  {% if not has_token %}
+    <div class="alert alert-warning">
+      {{ t('dashboard.no_token') }} <a href="{{ url_for('settings') }}">{{ t('dashboard.no_token_cta') }}</a>
+    </div>
+  {% endif %}
+
+  <div class="alert alert-error" id="last-run-error-alert" {{ '' if last_run_error else 'hidden' }}>
+    {{ t('dashboard.last_run_error') }} <span id="last-run-error-text">{{ last_run_error or '' }}</span>
+  </div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="card-label">{{ t('dashboard.card_ipv4') }}</div>
+      <div class="card-value" id="card-ipv4">{{ last_ipv4 or t('dashboard.unknown') }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t('dashboard.card_ipv6') }}</div>
+      <div class="card-value" id="card-ipv6">{{ last_ipv6 or "n/a" }}</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t('dashboard.card_interval') }}</div>
+      <div class="card-value">{{ check_interval }}s</div>
+    </div>
+    <div class="card">
+      <div class="card-label">{{ t('dashboard.card_last_run') }}</div>
+      <div class="card-value" id="card-last-run">{{ format_ts(last_run_at) or t('dashboard.never') }}</div>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <form method="post" action="{{ url_for('sync_now') }}" class="inline-form">
+      <button type="submit" class="btn btn-primary">{{ t('dashboard.sync_now') }}</button>
+    </form>
+    <a href="{{ url_for('new_record_form') }}" class="btn">{{ t('new_record.title') }}</a>
+  </div>
+
+  <h2>{{ t('dashboard.records_title') }}</h2>
+  {% if not records %}
+    <p class="empty">{{ t('dashboard.no_records') }} <a href="{{ url_for('new_record_form') }}">{{ t('dashboard.no_records_cta') }}</a>.</p>
+  {% else %}
+    <div class="table-scroll">
+    <table class="records" id="records-table">
+      <thead>
+        <tr>
+          <th>{{ t('dashboard.th_host') }}</th>
+          <th>{{ t('dashboard.th_type') }}</th>
+          <th>{{ t('dashboard.th_ttl') }}</th>
+          <th>{{ t('dashboard.th_current_ip') }}</th>
+          <th>{{ t('dashboard.th_status') }}</th>
+          <th>{{ t('dashboard.th_last_sync') }}</th>
+          <th>{{ t('dashboard.th_active') }}</th>
+          <th></th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in records %}
+        <tr data-record-id="{{ r.id }}">
+          <td>{{ (r.name + "." + r.domain) if r.name else r.domain }}</td>
+          <td>{{ r.type }}</td>
+          <td>{{ r.ttl }}</td>
+          <td class="col-current-ip">{{ r.last_ip or "-" }}</td>
+          <td>
+            <span class="status status-{{ r.last_status }}">{{ t('status.' + r.last_status) }}</span>
+            <div class="error-text" {{ '' if r.last_error else 'hidden' }}>{{ r.last_error or '' }}</div>
+          </td>
+          <td class="col-last-sync">{{ format_ts(r.last_sync_at) or "-" }}</td>
+          <td>
+            <form method="post" action="{{ url_for('toggle_record', record_id=r.id) }}" class="inline-form">
+              <button type="submit" class="btn btn-small">{{ t('dashboard.btn_on') if r.enabled else t('dashboard.btn_off') }}</button>
+            </form>
+          </td>
+          <td>
+            <a href="{{ url_for('edit_record_form', record_id=r.id) }}" class="btn btn-small btn-icon"
+               title="{{ t('dashboard.btn_edit') }}" aria-label="{{ t('dashboard.btn_edit') }}">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                <path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.996.996 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/>
+              </svg>
+            </a>
+          </td>
+          <td>
+            <form method="post" action="{{ url_for('delete_record', record_id=r.id) }}" class="inline-form"
+                  onsubmit="return confirm('{{ t('dashboard.confirm_delete') }}');">
+              <button type="submit" class="btn btn-danger btn-small">{{ t('dashboard.btn_delete') }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  {% endif %}
+
+  <script>
+    // Keeps the dashboard up to date without requiring a page reload -
+    // both after a manual "Sync now" (the click only triggers the sync in the
+    // background, it's usually not finished yet by the time of the redirect)
+    // and after an automatic sync according to the check interval.
+    (function () {
+      var STATUS_LABELS = {{ status_labels|tojson }};
+      var UNKNOWN = {{ t('dashboard.unknown')|tojson }};
+      var NEVER = {{ t('dashboard.never')|tojson }};
+
+      function applyStatus(data) {
+        var ipv4El = document.getElementById('card-ipv4');
+        if (ipv4El) ipv4El.textContent = data.last_ipv4 || UNKNOWN;
+        var ipv6El = document.getElementById('card-ipv6');
+        if (ipv6El) ipv6El.textContent = data.last_ipv6 || 'n/a';
+        var lastRunEl = document.getElementById('card-last-run');
+        if (lastRunEl) lastRunEl.textContent = data.last_run_at || NEVER;
+
+        var errorAlert = document.getElementById('last-run-error-alert');
+        var errorText = document.getElementById('last-run-error-text');
+        if (errorAlert && errorText) {
+          if (data.last_run_error) {
+            errorText.textContent = data.last_run_error;
+            errorAlert.hidden = false;
+          } else {
+            errorAlert.hidden = true;
+          }
+        }
+
+        (data.records || []).forEach(function (r) {
+          var row = document.querySelector('#records-table tr[data-record-id="' + r.id + '"]');
+          if (!row) return;
+          var ipCell = row.querySelector('.col-current-ip');
+          if (ipCell) ipCell.textContent = r.last_ip || '-';
+          var syncCell = row.querySelector('.col-last-sync');
+          if (syncCell) syncCell.textContent = r.last_sync_at || '-';
+          var badge = row.querySelector('.status');
+          if (badge) {
+            badge.className = 'status status-' + r.last_status;
+            badge.textContent = STATUS_LABELS[r.last_status] || r.last_status;
+          }
+          var errDiv = row.querySelector('.error-text');
+          if (errDiv) {
+            if (r.last_error) {
+              errDiv.textContent = r.last_error;
+              errDiv.hidden = false;
+            } else {
+              errDiv.hidden = true;
+            }
+          }
+        });
+      }
+
+      function refreshDashboard() {
+        fetch("{{ url_for('api_status') }}", { credentials: 'same-origin' })
+          .then(function (res) { return res.ok ? res.json() : null; })
+          .then(function (data) { if (data) applyStatus(data); })
+          .catch(function () { /* next attempt follows, ignore network errors */ });
+      }
+
+      setInterval(refreshDashboard, 4000);
+    })();
+  </script>
+{% endblock %}

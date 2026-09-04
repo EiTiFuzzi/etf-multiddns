@@ -1,0 +1,30 @@
+name: CI
+
+# Builds the image on every push/PR to main as a smoke test (without pushing
+# to a registry), so a broken Dockerfile / requirements.txt is caught
+# immediately - independent of the release workflow.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build image (do not publish)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          tags: etf-multiddns:ci
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

@@ -1,0 +1,23 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('login.title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('login.title') }}</h1>
+
+  {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" class="form">
+    <label>
+      {{ t('login.label_username') }}
+      <input type="text" name="username" autocomplete="username" autofocus required>
+    </label>
+    <label>
+      {{ t('login.label_password') }}
+      <input type="password" name="password" autocomplete="current-password" required>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('login.btn') }}</button>
+    </div>
+  </form>
+{% endblock %}

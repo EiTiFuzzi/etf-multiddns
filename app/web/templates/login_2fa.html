@@ -1,0 +1,22 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('login2fa.title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('login2fa.title') }}</h1>
+  <p class="hint">{{ t('login2fa.intro') }}</p>
+
+  {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  <form method="post" class="form">
+    <label>
+      {{ t('login2fa.label_code') }}
+      <input type="text" name="code" autocomplete="one-time-code" autofocus required>
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('login2fa.btn') }}</button>
+    </div>
+  </form>
+
+  <p class="hint">{{ t('login2fa.recovery_hint') }}</p>
+{% endblock %}

@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}{{ t('settings.totp_setup_title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('settings.totp_setup_title') }}</h1>
+  <p class="hint">{{ t('settings.totp_setup_intro') }}</p>
+
+  {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  <div class="totp-qr">{{ qr_svg | safe }}</div>
+
+  <p class="hint">
+    {{ t('settings.totp_manual_key_label') }} <code>{{ secret }}</code>
+  </p>
+
+  <form method="post" action="{{ url_for('confirm_2fa_setup') }}" class="form">
+    <label>
+      {{ t('settings.totp_label_code') }}
+      <input type="text" name="code" autocomplete="one-time-code" autofocus required
+             maxlength="6" pattern="[0-9]{6}" inputmode="numeric">
+    </label>
+    <div class="form-actions">
+      <button type="submit" class="btn btn-primary">{{ t('settings.totp_btn_confirm') }}</button>
+      <a href="{{ url_for('settings') }}" class="btn">{{ t('settings.totp_btn_cancel') }}</a>
+    </div>
+  </form>
+{% endblock %}

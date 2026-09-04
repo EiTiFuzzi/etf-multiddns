@@ -1,0 +1,716 @@
+/* Light theme = default (default values on :root). */
+:root {
+  --bg: #f8fafc;
+  --bg-panel: #ffffff;
+  --bg-panel-2: #f1f5f9;
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #0284c7;
+  --accent-contrast: #ffffff;
+  --green: #16a34a;
+  --red: #dc2626;
+  --yellow: #b45309;
+  --border: #e2e8f0;
+  --green-bg: rgba(22, 163, 74, 0.12);
+  --accent-bg: rgba(2, 132, 199, 0.12);
+  --red-bg: rgba(220, 38, 38, 0.1);
+  --yellow-bg: rgba(180, 83, 9, 0.12);
+}
+
+/* Dark theme, when the system prefers it AND no manual light override is set. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f172a;
+    --bg-panel: #1e293b;
+    --bg-panel-2: #26334a;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #38bdf8;
+    --accent-contrast: #0f172a;
+    --green: #22c55e;
+    --red: #ef4444;
+    --yellow: #eab308;
+    --border: #334155;
+    --green-bg: rgba(34, 197, 94, 0.15);
+    --accent-bg: rgba(56, 189, 248, 0.15);
+    --red-bg: rgba(239, 68, 68, 0.15);
+    --yellow-bg: rgba(234, 179, 8, 0.15);
+  }
+}
+
+/* Manual override wins in both directions. */
+:root[data-theme="dark"] {
+  --bg: #0f172a;
+  --bg-panel: #1e293b;
+  --bg-panel-2: #26334a;
+  --text: #e2e8f0;
+  --muted: #94a3b8;
+  --accent: #38bdf8;
+  --accent-contrast: #0f172a;
+  --green: #22c55e;
+  --red: #ef4444;
+  --yellow: #eab308;
+  --border: #334155;
+  --green-bg: rgba(34, 197, 94, 0.15);
+  --accent-bg: rgba(56, 189, 248, 0.15);
+  --red-bg: rgba(239, 68, 68, 0.15);
+  --yellow-bg: rgba(234, 179, 8, 0.15);
+}
+
+:root[data-theme="light"] {
+  --bg: #f8fafc;
+  --bg-panel: #ffffff;
+  --bg-panel-2: #f1f5f9;
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #0284c7;
+  --accent-contrast: #ffffff;
+  --green: #16a34a;
+  --red: #dc2626;
+  --yellow: #b45309;
+  --border: #e2e8f0;
+  --green-bg: rgba(22, 163, 74, 0.12);
+  --accent-bg: rgba(2, 132, 199, 0.12);
+  --red-bg: rgba(220, 38, 38, 0.1);
+  --yellow-bg: rgba(180, 83, 9, 0.12);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+
+a { color: var(--accent); }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand:hover {
+  opacity: 0.85;
+}
+
+.brand-logo {
+  height: 1.3em;
+  width: 1.3em;
+  flex-shrink: 0;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.burger-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.35rem 0.65rem;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.burger-btn:hover { color: var(--accent); }
+
+.topbar-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-left: auto;
+}
+
+/* Menu (burger/pinned menu) on the left */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.35);
+  z-index: 45;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.15s ease;
+}
+
+.sidebar-backdrop.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 240px;
+  max-width: 82vw;
+  background: var(--bg-panel);
+  border-right: 1px solid var(--border);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.2s ease;
+  overflow-y: auto;
+}
+
+.sidebar.open { transform: translateX(0); }
+
+/* Pinned: menu stays visible, content shifts aside via body padding.
+   Only from a certain width onward - on narrow (mobile) screens pinning
+   would otherwise take up almost half of the already-limited space, so the
+   menu there remains a normal, closable overlay. */
+@media (min-width: 641px) {
+  html.sidebar-pinned .sidebar { transform: translateX(0); }
+  html.sidebar-pinned .sidebar-backdrop { display: none; }
+  html.sidebar-pinned body { padding-left: 240px; }
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-title {
+  font-weight: 600;
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.3rem 0.4rem;
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.pin-icon { display: block; }
+
+.pin-btn.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  gap: 0.15rem;
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text);
+  text-decoration: none;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+}
+
+.sidebar-nav a:hover { background: var(--bg-panel-2); }
+
+.nav-icon {
+  /* fill/stroke is deliberately currentColor (see SVGs), so the icon always
+     appears in the menu item's text color - including for the active entry
+     (accent color) and the hover state. */
+  flex-shrink: 0;
+}
+
+.sidebar-nav a.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.dropdown {
+  position: relative;
+  display: inline-flex;
+}
+
+.dropdown-menu {
+  display: none;
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  min-width: 9rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  padding: 0.35rem;
+  z-index: 30;
+}
+
+.dropdown-menu.open {
+  display: block;
+}
+
+.dropdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.85rem;
+  font-family: inherit;
+  text-align: left;
+  padding: 0.4rem 0.6rem;
+  cursor: pointer;
+}
+
+.dropdown-item:hover {
+  background: var(--bg-panel-2);
+}
+
+.dropdown-check {
+  color: var(--accent);
+  visibility: hidden;
+}
+
+.dropdown-item.active .dropdown-check {
+  visibility: visible;
+}
+
+.theme-icon {
+  display: none;
+}
+
+.theme-icon.active {
+  display: block;
+}
+
+.content {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+h1 { margin-top: 0; }
+
+.cards {
+  display: grid;
+  /* Field order: IPv4, IPv6, check interval, last sync.
+     Last sync was originally 1.5fr, check interval 0.65fr (sum 2.15fr).
+     Last sync narrowed by 1/4 at the user's request (1.125fr), the freed-up
+     width (0.375fr) distributed to check interval (1.025fr) - the combined
+     width of the two cards stays the same at 2.15fr. */
+  grid-template-columns: 1fr 1fr 1.025fr 1.125fr;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .cards { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+}
+
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem 0.9rem;
+}
+
+.card-label { color: var(--muted); font-size: 0.8rem; margin-bottom: 0.28rem; }
+.card-value {
+  font-size: 1.15rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-scroll {
+  /* With many columns (Host/Type/TTL/IP/Status/Sync/Active/Edit/Delete) the
+     table doesn't fit the width on narrow screens - here only the table
+     itself should scroll, not the whole page. */
+  overflow-x: auto;
+}
+
+table.records {
+  width: 100%;
+  min-width: 680px;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+table.records th, table.records td {
+  text-align: left;
+  padding: 0.6rem 0.5rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.9rem;
+}
+
+.status {
+  padding: 0.15rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.status-unchanged { background: var(--green-bg); color: var(--green); }
+.status-updated, .status-created { background: var(--accent-bg); color: var(--accent); }
+.status-error { background: var(--red-bg); color: var(--red); }
+.status-pending { background: var(--yellow-bg); color: var(--yellow); }
+
+.error-text { color: var(--red); font-size: 0.75rem; margin-top: 0.2rem; }
+
+.btn {
+  display: inline-block;
+  background: var(--bg-panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.btn-primary { background: var(--accent); color: var(--accent-contrast); border-color: var(--accent); font-weight: 600; }
+.btn-danger { background: var(--red-bg); color: var(--red); border-color: var(--red); }
+.btn-small { padding: 0.3rem 0.6rem; font-size: 0.8rem; }
+.btn:disabled, .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.35rem;
+  line-height: 0;
+}
+
+/* Language button: globe icon plus the currently active language code (DE/EN),
+   so the current language is visible at a glance without opening the dropdown. */
+.btn-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-lang-code {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.inline-form { display: inline; }
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  /* No max-width of its own: input fields should have the same width as the
+     rest of the page content (e.g. the card row on the dashboard). */
+}
+
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.form input, .form select {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  width: 100%;
+}
+
+.form input:disabled { opacity: 0.6; }
+
+/* Checkbox/file inputs shouldn't get the full-width boxed styling above
+   (that's meant for text/number/select fields) - a checkbox stretched to
+   100% width with padding looks broken. */
+.form input[type="checkbox"],
+.form input[type="radio"] {
+  width: auto;
+  padding: 0;
+  border: none;
+  background: none;
+}
+
+/* File inputs are custom-styled (see .file-input below) rather than shown
+   natively - see that comment for why. */
+
+/* A single checkbox + its label text on one line (e.g. "Enable HTTPS"),
+   instead of the usual label-above-input layout used by .form label. */
+.form-checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 0.5rem !important;
+}
+
+.form-checkbox input[type="checkbox"] {
+  width: 1.1rem;
+  height: 1.1rem;
+}
+
+/* Small read-only info box for certificate details (subject, expiry, ...)
+   in Settings - HTTPS section. */
+.cert-info {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.cert-info strong { color: var(--text); }
+
+/* Custom file picker (certificate/key upload). A plain native
+   <input type="file"> renders its own "Choose File"/"No file chosen" text
+   in the BROWSER's UI language (Chromium/Firefox both ignore this page's
+   <html lang> for that), so it stayed German even with English selected in
+   the app. Fixed by hiding the native input (kept functional/keyboard
+   -focusable, just moved off-screen instead of display:none) and showing
+   our own <label> button + filename <span> instead, both driven by the
+   same i18n system as everything else. */
+.file-field-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin-bottom: 0.35rem;
+}
+
+.file-input {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.file-input-trigger {
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.file-input-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.file-input-name {
+  color: var(--muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+/* QR code for the 2FA setup page - deliberately always white behind the
+   code, regardless of theme: the black-on-white contrast is what phone
+   camera scanners rely on, unlike everything else on this page. */
+.totp-qr {
+  display: inline-block;
+  background: #ffffff;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+
+.totp-qr svg {
+  display: block;
+  width: 200px;
+  height: 200px;
+}
+
+/* Recovery codes grid (2FA setup / regenerate) - shown once, so laid out to
+   be easy to read and copy down. */
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.recovery-codes code {
+  display: block;
+  text-align: center;
+  font-size: 0.95rem;
+  padding: 0.4rem;
+}
+
+/* Action buttons (Save, Cancel, Test connection, ...): side by side and
+   left-aligned on desktop (not stretched to full width like the input
+   fields), full width and stacked instead on narrow screens. Works both as
+   a direct child of .form and as a standalone <form> (e.g. "Sync now"). */
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .form-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .form-actions .btn {
+    text-align: center;
+  }
+
+  /* A button wrapped in its own <form class="inline-form"> (e.g. "Sync now")
+     is a flex item indirectly - align-items:stretch above stretches the
+     <form>, not the <button> inside it, so the button itself still needs to
+     be told to fill that stretched form's width explicitly. */
+  .form-actions > form {
+    display: block;
+    width: 100%;
+  }
+
+  .form-actions > form .btn {
+    width: 100%;
+  }
+}
+
+.alert {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+}
+
+.alert-warning { background: var(--yellow-bg); color: var(--yellow); }
+.alert-error { background: var(--red-bg); color: var(--red); }
+.alert-info { background: var(--accent-bg); color: var(--accent); }
+
+.hint { color: var(--muted); font-size: 0.85rem; }
+.empty { color: var(--muted); }
+
+.logs {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.footer {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  padding: 1.5rem;
+}
+
+.footer a { color: var(--accent); }
+
+.footer-version {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-top: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+}
+
+.footer-version a {
+  display: inline-flex;
+  align-items: center;
+  color: inherit;
+}
+
+.footer-version a:hover {
+  color: var(--accent);
+}
+
+/* Login / initial setup */
+.auth-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.auth-topbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+}
+
+.auth-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.auth-card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 360px;
+}
+
+.auth-brand {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: var(--muted);
+}
+
+.auth-card h1 {
+  font-size: 1.3rem;
+  text-align: center;
+  margin-top: 0;
+}

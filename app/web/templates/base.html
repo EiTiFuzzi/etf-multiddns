@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="{{ current_lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{{ t('brand') }}{% endblock %}</title>
+  <script>
+    // Run early (before CSS rendering), so it doesn't briefly flash the wrong
+    // theme on load, or briefly collapse the pinned menu. "system" or no
+    // stored value = no data-theme attribute, then the prefers-color-scheme
+    // media query decides.
+    (function () {
+      try {
+        var stored = localStorage.getItem('theme');
+        if (stored === 'light' || stored === 'dark') {
+          document.documentElement.setAttribute('data-theme', stored);
+        }
+        if (localStorage.getItem('sidebarPinned') === '1') {
+          document.documentElement.classList.add('sidebar-pinned');
+        }
+      } catch (e) { /* localStorage may not be available */ }
+    })();
+  </script>
+  <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='etf-multiddns-logo.svg') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <div id="sidebar-backdrop" class="sidebar-backdrop" onclick="closeSidebar()"></div>
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">{{ t('nav.menu') }}</span>
+      <button type="button" class="pin-btn" id="pin-btn" onclick="toggleSidebarPin()" title="{{ t('nav.pin') }}" aria-label="{{ t('nav.pin') }}">
+        <svg class="pin-icon" viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+          <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5.2v6h1.6v-6H18v-2z"/>
+        </svg>
+      </button>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint == 'index' else '' }}">
+        <svg class="nav-icon" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true">
+          <rect x="3" y="3" width="8" height="8" rx="1.5"/>
+          <rect x="13" y="3" width="8" height="8" rx="1.5"/>
+          <rect x="3" y="13" width="8" height="8" rx="1.5"/>
+          <rect x="13" y="13" width="8" height="8" rx="1.5"/>
+        </svg>
+        {{ t('nav.dashboard') }}
+      </a>
+      <a href="{{ url_for('settings') }}" class="{{ 'active' if request.endpoint == 'settings' else '' }}">
+        <svg class="nav-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <line x1="4" y1="6" x2="20" y2="6"/>
+          <circle cx="9" cy="6" r="2" fill="currentColor" stroke="none"/>
+          <line x1="4" y1="12" x2="20" y2="12"/>
+          <circle cx="15" cy="12" r="2" fill="currentColor" stroke="none"/>
+          <line x1="4" y1="18" x2="20" y2="18"/>
+          <circle cx="7" cy="18" r="2" fill="currentColor" stroke="none"/>
+        </svg>
+        {{ t('nav.settings') }}
+      </a>
+      <a href="{{ url_for('logs') }}" class="{{ 'active' if request.endpoint == 'logs' else '' }}">
+        <svg class="nav-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="5" y="3" width="14" height="18" rx="2"/>
+          <line x1="8" y1="8" x2="16" y2="8"/>
+          <line x1="8" y1="12" x2="16" y2="12"/>
+          <line x1="8" y1="16" x2="13" y2="16"/>
+        </svg>
+        {{ t('nav.logs') }}
+      </a>
+    </nav>
+  </aside>
+
+  <header class="topbar">
+    <div class="topbar-left">
+      <button type="button" class="burger-btn" onclick="toggleSidebar()" aria-label="{{ t('nav.menu') }}">☰</button>
+      <a href="{{ url_for('index') }}" class="brand">
+        <img src="{{ url_for('static', filename='etf-multiddns-logo.svg') }}" alt="" class="brand-logo">
+        {{ t('brand') }}
+      </a>
+    </div>
+    <div class="topbar-tools">
+      <div class="dropdown" id="lang-dropdown">
+        <button type="button" class="btn btn-small btn-lang" onclick="toggleLangMenu(event)"
+                aria-label="{{ t('lang.label') }}" title="{{ t('lang.label') }}" aria-haspopup="true" aria-expanded="false">
+          <span class="btn-lang-code">{{ current_lang|upper }}</span>
+        </button>
+        <div class="dropdown-menu" id="lang-menu" role="menu" aria-label="{{ t('lang.label') }}">
+          {% for code in languages %}
+            <a href="{{ url_for('set_language', code=code, next=request.path) }}"
+               class="dropdown-item {{ 'active' if code == current_lang else '' }}" role="menuitem">
+              {{ code|upper }}
+              <svg class="dropdown-check" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="20 6 9 17 4 12"/>
+              </svg>
+            </a>
+          {% endfor %}
+        </div>
+      </div>
+      <button type="button" class="btn btn-small btn-icon" id="theme-btn" onclick="cycleTheme()"
+              aria-label="{{ t('theme.label') }}" title="{{ t('theme.label') }}">
+        <svg class="theme-icon" data-theme-icon="light" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"/>
+          <line x1="12" y1="2" x2="12" y2="4"/>
+          <line x1="12" y1="20" x2="12" y2="22"/>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+          <line x1="2" y1="12" x2="4" y2="12"/>
+          <line x1="20" y1="12" x2="22" y2="12"/>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg class="theme-icon" data-theme-icon="dark" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+        <svg class="theme-icon" data-theme-icon="system" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="2" y="4" width="20" height="14" rx="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="18" x2="12" y2="21"/>
+        </svg>
+      </button>
+      <form method="post" action="{{ url_for('logout') }}" class="inline-form">
+        <button type="submit" class="btn btn-small btn-icon" aria-label="{{ t('nav.logout') }}" title="{{ t('nav.logout') }}">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+            <polyline points="16 17 21 12 16 7"/>
+            <line x1="21" y1="12" x2="9" y2="12"/>
+          </svg>
+        </button>
+      </form>
+    </div>
+  </header>
+  <main class="content">
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer">
+    <div>{{ t('footer.tagline') }} <a href="https://domain.chief.app" target="_blank" rel="noopener">Domain Chief</a></div>
+    <div class="footer-version">
+      <a href="https://github.com/EiTiFuzzi/etf-multiddns" target="_blank" rel="noopener" aria-label="GitHub">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor" aria-hidden="true">
+          <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+        </svg>
+      </a>
+      {{ t('footer.version') }} {{ app_version }}
+    </div>
+  </footer>
+  <script>
+    // From this width upward, the pinned menu behaves like a permanently
+    // visible side menu. Below it (mobile devices) pinning would take up
+    // almost half of the already-limited space, so it always remains a
+    // normal overlay closable via backdrop/Escape there.
+    var SIDEBAR_PIN_MIN_WIDTH = 641;
+
+    function isPinningActive() {
+      return document.documentElement.classList.contains('sidebar-pinned')
+        && window.innerWidth >= SIDEBAR_PIN_MIN_WIDTH;
+    }
+
+    function toggleSidebar() {
+      var sidebar = document.getElementById('sidebar');
+      var backdrop = document.getElementById('sidebar-backdrop');
+      if (isPinningActive()) {
+        // With the menu pinned, only toggle it temporarily without releasing the pin.
+        sidebar.classList.toggle('open');
+        return;
+      }
+      var willOpen = !sidebar.classList.contains('open');
+      sidebar.classList.toggle('open', willOpen);
+      backdrop.classList.toggle('visible', willOpen);
+    }
+
+    function closeSidebar() {
+      if (isPinningActive()) return;
+      document.getElementById('sidebar').classList.remove('open');
+      document.getElementById('sidebar-backdrop').classList.remove('visible');
+    }
+
+    function applySidebarPinned(pinned) {
+      document.documentElement.classList.toggle('sidebar-pinned', pinned);
+      document.getElementById('pin-btn').classList.toggle('active', pinned);
+      var sidebar = document.getElementById('sidebar');
+      var backdrop = document.getElementById('sidebar-backdrop');
+      if (pinned && window.innerWidth >= SIDEBAR_PIN_MIN_WIDTH) {
+        sidebar.classList.add('open');
+        backdrop.classList.remove('visible');
+      } else {
+        // When unpinning, the menu should collapse again immediately, not
+        // only after a page reload. On narrow screens it stays closed for
+        // the same reason as well, even if "pinned" is stored.
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('visible');
+      }
+    }
+
+    function toggleSidebarPin() {
+      var pinned = !document.documentElement.classList.contains('sidebar-pinned');
+      applySidebarPinned(pinned);
+      try { localStorage.setItem('sidebarPinned', pinned ? '1' : '0'); } catch (e) { /* ignore */ }
+    }
+
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        closeSidebar();
+        closeLangMenu();
+      }
+    });
+
+    // Re-apply pinning when the device is rotated or the window is resized,
+    // so the menu opens/collapses correctly, e.g. when crossing the mobile
+    // threshold.
+    window.addEventListener('resize', function () {
+      applySidebarPinned(document.documentElement.classList.contains('sidebar-pinned'));
+    });
+
+    // Initially align the pin button state with the sidebar-pinned class
+    // already set on <html> by the early head script.
+    applySidebarPinned(document.documentElement.classList.contains('sidebar-pinned'));
+
+    function getCurrentTheme() {
+      try {
+        var stored = localStorage.getItem('theme');
+        if (stored === 'light' || stored === 'dark') return stored;
+      } catch (e) { /* ignore */ }
+      return 'system';
+    }
+
+    var THEME_CYCLE = ['light', 'dark', 'system'];
+
+    function setTheme(value) {
+      try {
+        if (value === 'system') {
+          localStorage.removeItem('theme');
+          document.documentElement.removeAttribute('data-theme');
+        } else {
+          localStorage.setItem('theme', value);
+          document.documentElement.setAttribute('data-theme', value);
+        }
+      } catch (e) { /* localStorage may not be available */ }
+      updateThemeButton();
+    }
+
+    // The theme button isn't a selection of options anymore - it's a single
+    // control the user presses repeatedly, stepping through light -> dark ->
+    // system -> light ... on each click, with its icon reflecting whichever
+    // state is currently active.
+    function cycleTheme() {
+      var current = getCurrentTheme();
+      var next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
+      setTheme(next);
+    }
+
+    function updateThemeButton() {
+      var current = getCurrentTheme();
+      document.querySelectorAll('.theme-icon').forEach(function (icon) {
+        icon.classList.toggle('active', icon.getAttribute('data-theme-icon') === current);
+      });
+    }
+
+    updateThemeButton();
+
+    // Language dropdown: opens on button click, closes on a second click of
+    // the button, a click outside it, selecting an item (normal navigation),
+    // or Escape (handled in the keydown listener above).
+    function toggleLangMenu(e) {
+      e.stopPropagation();
+      var menu = document.getElementById('lang-menu');
+      var willOpen = !menu.classList.contains('open');
+      menu.classList.toggle('open', willOpen);
+      e.currentTarget.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
+    }
+
+    function closeLangMenu() {
+      var menu = document.getElementById('lang-menu');
+      if (!menu) return;
+      menu.classList.remove('open');
+      var dropdown = document.getElementById('lang-dropdown');
+      var btn = dropdown && dropdown.querySelector('button');
+      if (btn) btn.setAttribute('aria-expanded', 'false');
+    }
+
+    document.addEventListener('click', function (e) {
+      var dropdown = document.getElementById('lang-dropdown');
+      if (dropdown && !dropdown.contains(e.target)) closeLangMenu();
+    });
+  </script>
+</body>
+</html>

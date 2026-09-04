@@ -1,0 +1,23 @@
+{
+  "api_token": "",
+  "team_id": "",
+  "check_interval": 300,
+  "ipv4_providers": [],
+  "ipv6_providers": [],
+  "records": [
+    {
+      "id": "home01",
+      "domain": "beispiel.at",
+      "name": "home",
+      "type": "A",
+      "ttl": 300,
+      "enabled": true,
+      "comment": "Managed by etf-multiddns",
+      "last_ip": null,
+      "last_sync_at": null,
+      "last_status": "pending",
+      "last_error": null,
+      "dns_record_id": null
+    }
+  ]
+}

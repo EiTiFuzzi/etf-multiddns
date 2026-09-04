@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ t('settings.totp_recovery_title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('settings.totp_recovery_title') }}</h1>
+  <div class="alert alert-warning">{{ t('settings.totp_recovery_warning') }}</div>
+
+  <div class="recovery-codes">
+    {% for code in recovery_codes %}
+      <code>{{ code }}</code>
+    {% endfor %}
+  </div>
+
+  <div class="form-actions">
+    <a href="{{ url_for('settings') }}" class="btn btn-primary">{{ t('settings.totp_btn_done') }}</a>
+  </div>
+{% endblock %}
