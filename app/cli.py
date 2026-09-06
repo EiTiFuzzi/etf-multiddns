@@ -34,6 +34,14 @@ def main() -> int:
     add_p.add_argument("--type", choices=["A", "AAAA"], default="A")
     add_p.add_argument("--ttl", type=int, default=300)
     add_p.add_argument("--comment", default="Managed by etf-multiddns")
+    add_p.add_argument(
+        "--provider", choices=["domainchief", "cloudflare"], default="domainchief",
+        help="DNS-Provider (Standard: domainchief)",
+    )
+    add_p.add_argument(
+        "--proxied", action="store_true",
+        help="Nur Cloudflare: Record ueber Cloudflares Proxy laufen lassen (orange Wolke)",
+    )
 
     remove_p = sub.add_parser("remove", help="Record entfernen (lokal + bei Domain Chief)")
     remove_p.add_argument("record_id")
@@ -51,12 +59,14 @@ def main() -> int:
             return 0
         for r in records:
             host = f"{r['name']}.{r['domain']}" if r["name"] else r["domain"]
-            print(f"{r['id']}\t{host}\t{r['type']}\tstatus={r['last_status']}\tip={r.get('last_ip')}")
+            provider = r.get("provider", "domainchief")
+            print(f"{r['id']}\t{host}\t{r['type']}\tprovider={provider}\tstatus={r['last_status']}\tip={r.get('last_ip')}")
         return 0
 
     if args.command == "add":
         record = config_module.add_record(
-            service.config, domain=args.domain, name=args.name, record_type=args.type, ttl=args.ttl, comment=args.comment
+            service.config, domain=args.domain, name=args.name, record_type=args.type, ttl=args.ttl,
+            comment=args.comment, provider=args.provider, proxied=args.proxied,
         )
         print(f"Record hinzugefuegt: {record['id']}")
         return 0

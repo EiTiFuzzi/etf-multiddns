@@ -238,6 +238,7 @@ class DomainChiefClient:
         prio: Optional[int] = None,
         comment: Optional[str] = None,
         metadata: Optional[dict] = None,
+        proxied: Optional[bool] = None,  # noqa: ARG002 - Cloudflare-only, accepted for a uniform call site in ddns.py
     ) -> DNSRecord:
         body: dict[str, Any] = {"type": record_type, "content": content, "ttl": ttl}
         if name:
@@ -258,9 +259,11 @@ class DomainChiefClient:
         record_type: str,
         content: str,
         ttl: int = 300,
+        name: Optional[str] = None,  # noqa: ARG002 - Domain Chief identifies records by ID, not name; renaming is delete+recreate. Accepted (and ignored) so callers can pass it uniformly across providers.
         prio: Optional[int] = None,
         comment: Optional[str] = None,
         metadata: Optional[dict] = None,
+        proxied: Optional[bool] = None,  # noqa: ARG002 - Cloudflare-only, accepted for a uniform call site in ddns.py
     ) -> DNSRecord:
         # PUT requires type/content/ttl as mandatory fields (full replace, not a PATCH).
         body: dict[str, Any] = {"type": record_type, "content": content, "ttl": ttl}

@@ -3,22 +3,34 @@
 {% block content %}
   <h1>{{ t('edit_record.title') if record else t('new_record.title') }}</h1>
 
-  {% if error %}
-    <div class="alert alert-error">{{ t('new_record.domains_error') }} {{ error }}</div>
+  {% if errors_by_provider and errors_by_provider.get('domainchief') %}
+    <div class="alert alert-error">Domain Chief: {{ t('new_record.domains_error') }} {{ errors_by_provider['domainchief'] }}</div>
+  {% endif %}
+  {% if errors_by_provider and errors_by_provider.get('cloudflare') %}
+    <div class="alert alert-error">Cloudflare: {{ t('new_record.domains_error') }} {{ errors_by_provider['cloudflare'] }}</div>
   {% endif %}
 
   <form method="post" action="{{ url_for('edit_record', record_id=record.id) if record else url_for('create_record') }}" class="form">
     <label>
+      {{ t('new_record.label_provider') }}
+      <select name="provider" id="provider-select">
+        <option value="domainchief" {{ 'selected' if (record and record.provider != 'cloudflare') or not record else '' }}>Domain Chief</option>
+        <option value="cloudflare" {{ 'selected' if record and record.provider == 'cloudflare' else '' }}>Cloudflare</option>
+      </select>
+    </label>
+    {% if not cloudflare_available and not (record and record.provider == 'cloudflare') %}
+      <p class="hint">{{ t('new_record.provider_cloudflare_not_configured') }}</p>
+    {% endif %}
+
+    <label>
       {{ t('new_record.label_domain') }}
       {% if record %}
         <input type="text" value="{{ record.domain }}" disabled>
-      {% elif domains %}
-        <select name="domain" required>
-          <option value="" disabled selected>{{ t('new_record.domain_placeholder') }}</option>
-          {% for d in domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
-        </select>
       {% else %}
-        <input type="text" name="domain" placeholder="beispiel.at" required>
+        <select name="domain" id="domain-select" required>
+          <option value="" disabled selected>{{ t('new_record.domain_placeholder') }}</option>
+        </select>
+        <input type="text" name="domain" id="domain-input" placeholder="beispiel.at" style="display:none;">
       {% endif %}
     </label>
 
@@ -49,6 +61,12 @@
       <input type="text" name="comment" value="{{ record.comment if record else 'Managed by etf-multiddns' }}">
     </label>
 
+    <label class="form-checkbox" id="proxied-field">
+      <input type="checkbox" name="proxied" {{ 'checked' if record and record.proxied else '' }}>
+      {{ t('new_record.label_proxied') }}
+    </label>
+    <p class="hint" id="proxied-hint">{{ t('new_record.proxied_hint') }}</p>
+
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">{{ t('edit_record.btn_save') if record else t('new_record.btn_create') }}</button>
       <a href="{{ url_for('index') }}" class="btn">{{ t('new_record.btn_cancel') }}</a>
@@ -56,4 +74,76 @@
   </form>
 
   <p class="hint">{{ t('edit_record.hint') if record else t('new_record.hint') }}</p>
+
+  {% if not record %}
+  <script>
+    (function () {
+      var DOMAINS_BY_PROVIDER = {{ domains_by_provider|tojson }};
+      var providerSelect = document.getElementById('provider-select');
+      var domainSelect = document.getElementById('domain-select');
+      var domainInput = document.getElementById('domain-input');
+      var placeholder = {{ t('new_record.domain_placeholder')|tojson }};
+
+      function applyProvider() {
+        var provider = providerSelect.value;
+        var domains = DOMAINS_BY_PROVIDER[provider] || [];
+        toggleProxiedField(provider);
+        if (domains.length) {
+          domainSelect.innerHTML = '';
+          var opt0 = document.createElement('option');
+          opt0.value = '';
+          opt0.disabled = true;
+          opt0.selected = true;
+          opt0.textContent = placeholder;
+          domainSelect.appendChild(opt0);
+          domains.forEach(function (d) {
+            var opt = document.createElement('option');
+            opt.value = d;
+            opt.textContent = d;
+            domainSelect.appendChild(opt);
+          });
+          domainSelect.style.display = '';
+          domainSelect.disabled = false;
+          domainSelect.name = 'domain';
+          domainInput.style.display = 'none';
+          domainInput.disabled = true;
+          domainInput.name = '';
+        } else {
+          domainSelect.style.display = 'none';
+          domainSelect.disabled = true;
+          domainSelect.name = '';
+          domainInput.style.display = '';
+          domainInput.disabled = false;
+          domainInput.name = 'domain';
+        }
+      }
+
+      function toggleProxiedField(provider) {
+        var field = document.getElementById('proxied-field');
+        var hint = document.getElementById('proxied-hint');
+        var show = provider === 'cloudflare';
+        field.style.display = show ? '' : 'none';
+        hint.style.display = show ? '' : 'none';
+      }
+
+      providerSelect.addEventListener('change', applyProvider);
+      applyProvider();
+    })();
+  </script>
+  {% else %}
+  <script>
+    (function () {
+      var providerSelect = document.getElementById('provider-select');
+      var field = document.getElementById('proxied-field');
+      var hint = document.getElementById('proxied-hint');
+      function apply() {
+        var show = providerSelect.value === 'cloudflare';
+        field.style.display = show ? '' : 'none';
+        hint.style.display = show ? '' : 'none';
+      }
+      providerSelect.addEventListener('change', apply);
+      apply();
+    })();
+  </script>
+  {% endif %}
 {% endblock %}

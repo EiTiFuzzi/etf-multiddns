@@ -3,6 +3,8 @@
 {% block content %}
   <h1>{{ t('settings.title') }}</h1>
 
+  <h2>{{ t('settings.domainchief_title') }}</h2>
+
   {% if api_token_from_env %}
     <div class="alert alert-info">{{ t('settings.env_notice') }}</div>
   {% endif %}
@@ -22,6 +24,35 @@
       {{ t('settings.label_team') }}
       <input type="text" name="team_id" value="{{ team_id }}" {{ 'disabled' if api_token_from_env else '' }}>
     </label>
+
+    <div class="form-actions">
+      <button type="button" class="btn" onclick="testConnection()">{{ t('settings.btn_test') }}</button>
+    </div>
+    <p id="test-result"></p>
+
+    <h2>{{ t('settings.cloudflare_title') }}</h2>
+
+    {% if cloudflare_api_token_from_env %}
+      <div class="alert alert-info">{{ t('settings.cloudflare_env_notice') }}</div>
+    {% endif %}
+
+    <label>
+      {{ t('settings.cloudflare_label_token') }}
+      <input type="password" name="cloudflare_api_token"
+             placeholder="{{ t('settings.token_placeholder_set') if cloudflare_api_token_set else '...' }}"
+             {{ 'disabled' if cloudflare_api_token_from_env else '' }}>
+    </label>
+    <p class="hint">
+      {{ t('settings.cloudflare_token_hint') }} <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" rel="noopener">dash.cloudflare.com/profile/api-tokens</a>.
+      {{ t('settings.cloudflare_token_scopes_hint') }} <code>Zone:DNS:Edit</code>, <code>Zone:Zone:Read</code>.
+    </p>
+
+    <div class="form-actions">
+      <button type="button" class="btn" onclick="testCloudflareConnection()">{{ t('settings.btn_test') }}</button>
+    </div>
+    <p id="cloudflare-test-result"></p>
+
+    <h2>{{ t('settings.general_title') }}</h2>
 
     <label>
       {{ t('settings.label_interval') }}
@@ -51,11 +82,8 @@
 
     <div class="form-actions">
       <button type="submit" class="btn btn-primary">{{ t('settings.btn_save') }}</button>
-      <button type="button" class="btn" onclick="testConnection()">{{ t('settings.btn_test') }}</button>
     </div>
   </form>
-
-  <p id="test-result"></p>
 
   <h2>{{ t('settings.webui_title') }}</h2>
 
@@ -218,6 +246,15 @@
       const resultEl = document.getElementById('test-result');
       resultEl.textContent = '{{ t("settings.testing") }}';
       const res = await fetch("{{ url_for('test_connection') }}", { method: 'POST' });
+      const data = await res.json();
+      resultEl.textContent = data.message;
+      resultEl.className = data.ok ? 'alert alert-info' : 'alert alert-error';
+    }
+
+    async function testCloudflareConnection() {
+      const resultEl = document.getElementById('cloudflare-test-result');
+      resultEl.textContent = '{{ t("settings.testing") }}';
+      const res = await fetch("{{ url_for('test_cloudflare_connection') }}", { method: 'POST' });
       const data = await res.json();
       resultEl.textContent = data.message;
       resultEl.className = data.ok ? 'alert alert-info' : 'alert alert-error';

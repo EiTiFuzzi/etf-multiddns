@@ -74,6 +74,11 @@ DEFAULT_DATETIME_FORMAT = "iso"
 DEFAULT_CONFIG: dict[str, Any] = {
     "api_token": "",
     "team_id": "",
+    # Cloudflare API Token (Bearer auth, Zone:DNS:Edit + Zone:Zone:Read) - a
+    # second, independent DNS provider records can choose from (see the
+    # per-record "provider" field below). Both providers can be configured
+    # and used at the same time.
+    "cloudflare_api_token": "",
     "check_interval": 300,
     "ipv4_providers": [],
     "ipv6_providers": [],
@@ -189,12 +194,22 @@ def _merge_defaults(data: dict) -> dict:
         record.setdefault("ttl", 300)
         record.setdefault("enabled", True)
         record.setdefault("comment", "Managed by etf-multiddns")
+        # "domainchief" is the default (not "cloudflare") so records created
+        # before Cloudflare support existed keep working against Domain Chief
+        # unchanged after an upgrade.
+        record.setdefault("provider", "domainchief")
+        # Cloudflare-only ("proxied" / orange-cloud) - ignored for Domain Chief records.
+        record.setdefault("proxied", False)
         record.setdefault("last_ip", None)
         record.setdefault("last_sync_at", None)
         record.setdefault("last_status", "pending")
         record.setdefault("last_error", None)
         record.setdefault("dns_record_id", None)
     return merged
+
+
+PROVIDERS = ("domainchief", "cloudflare")
+DEFAULT_PROVIDER = "domainchief"
 
 
 def load_config() -> dict:
@@ -219,6 +234,9 @@ def load_config() -> dict:
     env_team = os.environ.get("DOMAINCHIEF_TEAM_ID")
     if env_team:
         config["team_id"] = env_team
+    env_cf_token = os.environ.get("CLOUDFLARE_API_TOKEN")
+    if env_cf_token:
+        config["cloudflare_api_token"] = env_cf_token
     env_interval = os.environ.get("CHECK_INTERVAL")
     if env_interval:
         try:
@@ -259,7 +277,16 @@ def _write(config: dict) -> None:
     tmp_path.replace(CONFIG_PATH)
 
 
-def add_record(config: dict, domain: str, name: str, record_type: str, ttl: int = 300, comment: str = "") -> dict:
+def add_record(
+    config: dict,
+    domain: str,
+    name: str,
+    record_type: str,
+    ttl: int = 300,
+    comment: str = "",
+    provider: str = DEFAULT_PROVIDER,
+    proxied: bool = False,
+) -> dict:
     record = {
         "id": uuid.uuid4().hex[:12],
         "domain": domain.strip().lower(),
@@ -268,6 +295,8 @@ def add_record(config: dict, domain: str, name: str, record_type: str, ttl: int 
         "ttl": int(ttl),
         "enabled": True,
         "comment": comment or "Managed by etf-multiddns",
+        "provider": provider if provider in PROVIDERS else DEFAULT_PROVIDER,
+        "proxied": bool(proxied),
         "last_ip": None,
         "last_sync_at": None,
         "last_status": "pending",
@@ -296,23 +325,40 @@ def get_record(config: dict, record_id: str) -> dict | None:
 
 
 def update_record(
-    config: dict, record_id: str, *, name: str, record_type: str, ttl: int, comment: str
+    config: dict,
+    record_id: str,
+    *,
+    name: str,
+    record_type: str,
+    ttl: int,
+    comment: str,
+    provider: str | None = None,
+    proxied: bool | None = None,
 ) -> dict | None:
-    """Updates the subdomain/type/TTL/comment of an existing record (the domain
-    itself stays fixed - changing the domain means delete+recreate, not an
-    edit). If the name or type changes, the record's identity at Domain
-    Chief changes too (lookup/matching is done via name+type) - the local
-    sync status is then reset so the next sync creates it fresh under the
-    new identity. Cleaning up the old remote record is the caller's
-    responsibility (needs the API client for that, see DDNSService)."""
+    """Updates the subdomain/type/TTL/comment/provider of an existing record
+    (the domain itself stays fixed - changing the domain means delete+
+    recreate, not an edit). If the name, type or provider changes, the
+    record's identity at the DNS provider changes too (lookup/matching is
+    done via name+type within one provider) - the local sync status is then
+    reset so the next sync creates it fresh under the new identity. Cleaning
+    up the old remote record is the caller's responsibility (needs the API
+    client for that, see DDNSService)."""
     record = get_record(config, record_id)
     if record is None:
         return None
-    identity_changed = record.get("name", "") != name or record["type"] != record_type
+    new_provider = provider if provider in PROVIDERS else record.get("provider", DEFAULT_PROVIDER)
+    identity_changed = (
+        record.get("name", "") != name
+        or record["type"] != record_type
+        or record.get("provider", DEFAULT_PROVIDER) != new_provider
+    )
     record["name"] = name
     record["type"] = record_type
     record["ttl"] = int(ttl)
     record["comment"] = comment or "Managed by etf-multiddns"
+    record["provider"] = new_provider
+    if proxied is not None:
+        record["proxied"] = bool(proxied)
     if identity_changed:
         record["dns_record_id"] = None
         record["last_ip"] = None

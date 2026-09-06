@@ -54,11 +54,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dashboard.th_status": "Status",
         "dashboard.th_last_sync": "Letzter Abgleich",
         "dashboard.th_active": "Aktiv",
+        "dashboard.th_provider": "Provider",
         "dashboard.btn_on": "An",
         "dashboard.btn_off": "Aus",
         "dashboard.btn_edit": "Bearbeiten",
         "dashboard.btn_delete": "Löschen",
-        "dashboard.confirm_delete": "Record wirklich bei Domain Chief löschen?",
+        "dashboard.confirm_delete": "Record wirklich beim DNS-Provider löschen?",
         "status.unchanged": "unverändert",
         "status.created": "erstellt",
         "status.updated": "aktualisiert",
@@ -67,32 +68,44 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Record hinzufügen
         "new_record.title": "Record hinzufügen",
         "new_record.domains_error": "Domains konnten nicht geladen werden:",
+        "new_record.label_provider": "DNS-Provider",
+        "new_record.provider_cloudflare_not_configured": (
+            "Für Cloudflare ist noch kein API-Token hinterlegt - in den Einstellungen nachtragen."
+        ),
         "new_record.label_domain": "Domain",
         "new_record.domain_placeholder": "Domain wählen …",
         "new_record.label_subdomain": "Subdomain (leer lassen für Root-Domain)",
         "new_record.label_type": "Typ",
         "new_record.label_ttl": "TTL (Sekunden)",
         "new_record.label_comment": "Kommentar",
+        "new_record.label_proxied": "Über Cloudflare proxen (orange Wolke)",
+        "new_record.proxied_hint": (
+            "Wenn aktiv, läuft der Traffic über Cloudflares Proxy (Performance/DDoS-Schutz, "
+            "die tatsächliche IP wird verborgen). Wenn deaktiviert, zeigt der Record direkt "
+            "auf die öffentliche IP (\"DNS only\", graue Wolke)."
+        ),
         "new_record.btn_create": "Anlegen",
         "new_record.btn_cancel": "Abbrechen",
         "new_record.hint": (
-            "Hinweis: Die Domain muss bei Domain Chief \"Hosted DNS\" verwenden (d.h. die "
-            "Nameserver von Domain Chief müssen aktiv sein). Existiert der Record schon, wird "
-            "er beim nächsten Abgleich automatisch übernommen und auf die aktuelle öffentliche "
-            "IP aktualisiert."
+            "Hinweis: Bei Domain Chief muss die Domain \"Hosted DNS\" verwenden (d.h. die "
+            "Nameserver von Domain Chief müssen aktiv sein); bei Cloudflare muss die Domain "
+            "als Zone im gewählten Account liegen. Existiert der Record schon, wird er beim "
+            "nächsten Abgleich automatisch übernommen und auf die aktuelle öffentliche IP "
+            "aktualisiert."
         ),
         # Record bearbeiten
         "edit_record.title": "Record bearbeiten",
         "edit_record.btn_save": "Speichern",
         "edit_record.hint": (
-            "Hinweis: Wird der Typ geändert, legt der nächste Abgleich automatisch einen "
-            "neuen DNS-Record bei Domain Chief an und entfernt den alten. Änderungen an TTL "
-            "und Kommentar werden ebenfalls erst beim nächsten Abgleich übernommen (Domain "
-            "und Subdomain können hier nicht geändert werden - dafür den Record löschen und "
-            "neu anlegen)."
+            "Hinweis: Wird der Typ oder der Provider geändert, legt der nächste Abgleich "
+            "automatisch einen neuen DNS-Record beim (neuen) Provider an und entfernt den "
+            "alten dort, wo er vorher war. Änderungen an TTL, Kommentar und Proxy-Status "
+            "werden ebenfalls erst beim nächsten Abgleich übernommen (Domain und Subdomain "
+            "können hier nicht geändert werden - dafür den Record löschen und neu anlegen)."
         ),
         # Einstellungen
         "settings.title": "Einstellungen",
+        "settings.domainchief_title": "Domain Chief",
         "settings.env_notice": (
             "API-Token und Team-ID werden über Umgebungsvariablen (DOMAINCHIEF_API_TOKEN / "
             "DOMAINCHIEF_TEAM_ID) gesetzt und können hier nicht überschrieben werden."
@@ -102,6 +115,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.token_hint": "Personal Access Token erstellen:",
         "settings.token_scopes_hint": "Benötigte Scopes:",
         "settings.label_team": "Team-ID (optional, nur bei Personal Access Token nötig falls nicht das Standard-Team verwendet werden soll)",
+        "settings.cloudflare_title": "Cloudflare",
+        "settings.cloudflare_env_notice": (
+            "Der Cloudflare API-Token wird über die Umgebungsvariable CLOUDFLARE_API_TOKEN "
+            "gesetzt und kann hier nicht überschrieben werden."
+        ),
+        "settings.cloudflare_label_token": "Cloudflare API-Token",
+        "settings.cloudflare_token_hint": "API-Token erstellen:",
+        "settings.cloudflare_token_scopes_hint": "Benötigte Berechtigungen:",
+        "settings.general_title": "Allgemein",
         "settings.label_interval": "Prüfintervall (Sekunden, minimal 60)",
         "settings.label_timezone": "Zeitzone",
         "settings.timezone_system_default": "Systemstandard (UTC)",
@@ -280,11 +302,12 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dashboard.th_status": "Status",
         "dashboard.th_last_sync": "Last sync",
         "dashboard.th_active": "Active",
+        "dashboard.th_provider": "Provider",
         "dashboard.btn_on": "On",
         "dashboard.btn_off": "Off",
         "dashboard.btn_edit": "Edit",
         "dashboard.btn_delete": "Delete",
-        "dashboard.confirm_delete": "Really delete this record on Domain Chief?",
+        "dashboard.confirm_delete": "Really delete this record at its DNS provider?",
         "status.unchanged": "unchanged",
         "status.created": "created",
         "status.updated": "updated",
@@ -293,30 +316,42 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         # Add record
         "new_record.title": "Add record",
         "new_record.domains_error": "Could not load domains:",
+        "new_record.label_provider": "DNS provider",
+        "new_record.provider_cloudflare_not_configured": (
+            "No API token configured for Cloudflare yet - add one in Settings."
+        ),
         "new_record.label_domain": "Domain",
         "new_record.domain_placeholder": "Select a domain …",
         "new_record.label_subdomain": "Subdomain (leave empty for the root domain)",
         "new_record.label_type": "Type",
         "new_record.label_ttl": "TTL (seconds)",
         "new_record.label_comment": "Comment",
+        "new_record.label_proxied": "Proxy through Cloudflare (orange cloud)",
+        "new_record.proxied_hint": (
+            "When enabled, traffic is routed through Cloudflare's proxy (performance/DDoS "
+            "protection, hides the actual IP). When disabled, the record points directly at "
+            "the public IP (\"DNS only\", grey cloud)."
+        ),
         "new_record.btn_create": "Create",
         "new_record.btn_cancel": "Cancel",
         "new_record.hint": (
-            "Note: the domain must use Domain Chief's \"Hosted DNS\" (i.e. Domain Chief's "
-            "nameservers must be active). If the record already exists, it will be picked up "
+            "Note: with Domain Chief, the domain must use \"Hosted DNS\" (i.e. Domain Chief's "
+            "nameservers must be active); with Cloudflare, the domain must exist as a zone in "
+            "the selected account. If the record already exists, it will be picked up "
             "automatically on the next sync and updated to the current public IP."
         ),
         # Edit record
         "edit_record.title": "Edit record",
         "edit_record.btn_save": "Save",
         "edit_record.hint": (
-            "Note: changing the type makes the next sync create a new DNS record at Domain "
-            "Chief and remove the old one automatically. Changes to TTL and comment are also "
-            "applied on the next sync (the domain and subdomain can't be changed here - "
-            "delete the record and add it again instead)."
+            "Note: changing the type or provider makes the next sync create a new DNS record "
+            "at the (new) provider and remove the old one wherever it used to be. Changes to "
+            "TTL, comment and proxy status are also applied on the next sync (the domain and "
+            "subdomain can't be changed here - delete the record and add it again instead)."
         ),
         # Settings
         "settings.title": "Settings",
+        "settings.domainchief_title": "Domain Chief",
         "settings.env_notice": (
             "The API token and team ID are set via environment variables (DOMAINCHIEF_API_TOKEN / "
             "DOMAINCHIEF_TEAM_ID) and cannot be overridden here."
@@ -326,6 +361,15 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.token_hint": "Create a personal access token:",
         "settings.token_scopes_hint": "Required scopes:",
         "settings.label_team": "Team ID (optional, only needed with a personal access token if the default team shouldn't be used)",
+        "settings.cloudflare_title": "Cloudflare",
+        "settings.cloudflare_env_notice": (
+            "The Cloudflare API token is set via the CLOUDFLARE_API_TOKEN environment variable "
+            "and cannot be overridden here."
+        ),
+        "settings.cloudflare_label_token": "Cloudflare API token",
+        "settings.cloudflare_token_hint": "Create an API token:",
+        "settings.cloudflare_token_scopes_hint": "Required permissions:",
+        "settings.general_title": "General",
         "settings.label_interval": "Check interval (seconds, minimum 60)",
         "settings.label_timezone": "Time zone",
         "settings.timezone_system_default": "System default (UTC)",

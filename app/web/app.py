@@ -21,10 +21,15 @@ from werkzeug.security import check_password_hash, generate_password_hash
 from .. import config as config_module
 from .. import tls as tls_module
 from .. import totp as totp_module
+from ..cloudflare_client import CloudflareClient, CloudflareError
 from ..ddns import DDNSService
 from ..domainchief_client import DomainChiefClient, DomainChiefError
 from ..https_server import HttpsServerManager, https_port
 from .i18n import DEFAULT_LANG, LANGUAGES, LANGUAGE_LABELS, translator
+
+# Both providers' errors, handled generically wherever a route doesn't need to
+# distinguish which provider failed (e.g. record delete).
+ProviderError = (DomainChiefError, CloudflareError)
 
 logger = logging.getLogger("etfmultiddns.web")
 
@@ -216,7 +221,7 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
             last_run_at=service.last_run_at,
             last_run_error=service.last_run_error,
             check_interval=cfg.get("check_interval", 300),
-            has_token=bool(cfg.get("api_token")),
+            has_token=bool(cfg.get("api_token")) or bool(cfg.get("cloudflare_api_token")),
             status_labels=status_labels,
         )
 
@@ -239,6 +244,7 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
         cfg = service.config
         token = request.form.get("api_token", "").strip()
         team_id = request.form.get("team_id", "").strip()
+        cloudflare_token = request.form.get("cloudflare_api_token", "").strip()
         interval = request.form.get("check_interval", "300").strip()
         timezone_name = request.form.get("timezone", "").strip()
         datetime_format = request.form.get("datetime_format", "").strip()
@@ -247,6 +253,8 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
             cfg["api_token"] = token
         if not _env_token():
             cfg["team_id"] = team_id
+        if cloudflare_token and not _env_cloudflare_token():
+            cfg["cloudflare_api_token"] = cloudflare_token
         try:
             cfg["check_interval"] = max(60, int(interval))
         except ValueError:
@@ -270,6 +278,19 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
             client.verify_credentials()
             return jsonify({"ok": True, "message": g.t("settings.test_success")})
         except DomainChiefError as exc:
+            return jsonify({"ok": False, "message": str(exc)})
+
+    @app.post("/settings/test-cloudflare")
+    def test_cloudflare_connection():
+        cfg = service.config
+        token = cfg.get("cloudflare_api_token", "")
+        if not token:
+            return jsonify({"ok": False, "message": g.t("settings.test_no_token")})
+        try:
+            client = CloudflareClient(api_token=token)
+            client.verify_credentials()
+            return jsonify({"ok": True, "message": g.t("settings.test_success")})
+        except CloudflareError as exc:
             return jsonify({"ok": False, "message": str(exc)})
 
     @app.post("/settings/webui")
@@ -426,16 +447,28 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
     @app.get("/records/new")
     def new_record_form():
         service.reload_config()
-        domains = []
-        error = None
         cfg = service.config
+        domains_by_provider: dict[str, list[str]] = {"domainchief": [], "cloudflare": []}
+        errors_by_provider: dict[str, str] = {}
         if cfg.get("api_token"):
             try:
                 client = DomainChiefClient(api_token=cfg["api_token"], team_id=cfg.get("team_id") or None)
-                domains = sorted(d.get("domain") for d in client.list_domains() if d.get("domain"))
+                domains_by_provider["domainchief"] = sorted(d.get("domain") for d in client.list_domains() if d.get("domain"))
             except DomainChiefError as exc:
-                error = str(exc)
-        return render_template("record_form.html", record=None, domains=domains, error=error)
+                errors_by_provider["domainchief"] = str(exc)
+        if cfg.get("cloudflare_api_token"):
+            try:
+                cf_client = CloudflareClient(api_token=cfg["cloudflare_api_token"])
+                domains_by_provider["cloudflare"] = sorted(d.get("domain") for d in cf_client.list_domains() if d.get("domain"))
+            except CloudflareError as exc:
+                errors_by_provider["cloudflare"] = str(exc)
+        return render_template(
+            "record_form.html",
+            record=None,
+            domains_by_provider=domains_by_provider,
+            errors_by_provider=errors_by_provider,
+            cloudflare_available=bool(cfg.get("cloudflare_api_token")),
+        )
 
     @app.post("/records/new")
     def create_record():
@@ -445,15 +478,20 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
         record_type = request.form.get("type", "A").strip().upper()
         ttl = request.form.get("ttl", "300").strip()
         comment = request.form.get("comment", "").strip()
+        provider = request.form.get("provider", "domainchief").strip().lower()
+        proxied = request.form.get("proxied") == "on"
 
-        if not domain or record_type not in ("A", "AAAA"):
+        if not domain or record_type not in ("A", "AAAA") or provider not in ("domainchief", "cloudflare"):
             return redirect(url_for("new_record_form"))
         try:
             ttl_value = max(60, int(ttl))
         except ValueError:
             ttl_value = 300
 
-        config_module.add_record(cfg, domain=domain, name=name, record_type=record_type, ttl=ttl_value, comment=comment)
+        config_module.add_record(
+            cfg, domain=domain, name=name, record_type=record_type, ttl=ttl_value, comment=comment,
+            provider=provider, proxied=proxied,
+        )
         service.reload_config()
         service.trigger_now()
         return redirect(url_for("index"))
@@ -461,10 +499,17 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
     @app.get("/records/<record_id>/edit")
     def edit_record_form(record_id: str):
         service.reload_config()
-        record = config_module.get_record(service.config, record_id)
+        cfg = service.config
+        record = config_module.get_record(cfg, record_id)
         if record is None:
             return redirect(url_for("index"))
-        return render_template("record_form.html", record=record, domains=[], error=None)
+        return render_template(
+            "record_form.html",
+            record=record,
+            domains_by_provider={"domainchief": [], "cloudflare": []},
+            errors_by_provider={},
+            cloudflare_available=bool(cfg.get("cloudflare_api_token")),
+        )
 
     @app.post("/records/<record_id>/edit")
     def edit_record(record_id: str):
@@ -481,8 +526,10 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
         record_type = request.form.get("type", record["type"]).strip().upper()
         ttl = request.form.get("ttl", "300").strip()
         comment = request.form.get("comment", "").strip()
+        provider = request.form.get("provider", record.get("provider", "domainchief")).strip().lower()
+        proxied = request.form.get("proxied") == "on"
 
-        if record_type not in ("A", "AAAA"):
+        if record_type not in ("A", "AAAA") or provider not in ("domainchief", "cloudflare"):
             return redirect(url_for("edit_record_form", record_id=record_id))
         try:
             ttl_value = max(60, int(ttl))
@@ -490,7 +537,10 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
             ttl_value = 300
 
         try:
-            service.update_record_and_resync(record_id, name=name, record_type=record_type, ttl=ttl_value, comment=comment)
+            service.update_record_and_resync(
+                record_id, name=name, record_type=record_type, ttl=ttl_value, comment=comment,
+                provider=provider, proxied=proxied,
+            )
         except KeyError:
             pass
         return redirect(url_for("index"))
@@ -499,7 +549,7 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
     def delete_record(record_id: str):
         try:
             service.delete_record_remote_and_local(record_id)
-        except (KeyError, DomainChiefError) as exc:
+        except (KeyError, *ProviderError) as exc:
             logger.error("Could not delete record %s: %s", record_id, exc)
         return redirect(url_for("index"))
 
@@ -547,6 +597,10 @@ def _env_token() -> str:
     return os.environ.get("DOMAINCHIEF_API_TOKEN", "")
 
 
+def _env_cloudflare_token() -> str:
+    return os.environ.get("CLOUDFLARE_API_TOKEN", "")
+
+
 def _env_timezone() -> str:
     # Deliberately NOT a live os.environ.get("TZ") read: config_module.apply_timezone()
     # also writes to os.environ["TZ"] to make a Web UI-selected timezone take effect
@@ -566,6 +620,8 @@ def _settings_context(cfg: dict) -> dict:
         "team_id": cfg.get("team_id", ""),
         "check_interval": cfg.get("check_interval", 300),
         "api_token_from_env": bool(_env_token()),
+        "cloudflare_api_token_set": bool(cfg.get("cloudflare_api_token")),
+        "cloudflare_api_token_from_env": bool(_env_cloudflare_token()),
         "webui_username": cfg.get("webui_username", ""),
         "webui_from_env": bool(_env_webui_credentials()),
         "timezone": cfg.get("timezone", ""),

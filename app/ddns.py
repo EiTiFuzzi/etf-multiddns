@@ -9,13 +9,21 @@ import logging
 import threading
 import time
 from collections import deque
-from typing import Optional
+from typing import Any, Optional
 
 from . import config as config_module
+from .cloudflare_client import CloudflareClient, CloudflareError, CloudflareRateLimitError
 from .domainchief_client import DomainChiefClient, DomainChiefError, DomainChiefRateLimitError
 from .ip_provider import get_public_ipv4, get_public_ipv6
 
 logger = logging.getLogger("etfmultiddns.ddns")
+
+# Both providers raise their own (structurally identical) exception classes -
+# these tuples let the sync loop handle "any provider error"/"any provider
+# rate limit" generically instead of duplicating every except-branch per
+# provider.
+ProviderError = (DomainChiefError, CloudflareError)
+ProviderRateLimitError = (DomainChiefRateLimitError, CloudflareRateLimitError)
 
 
 def _now_iso() -> str:
@@ -89,7 +97,16 @@ class DDNSService:
         logging.getLogger("etfmultiddns").addHandler(handler)
 
     # ------------------------------------------------------------------
-    def _client(self) -> DomainChiefClient:
+    def _client(self, provider: str = "domainchief"):
+        """Returns a provider client for the given record provider
+        ("domainchief" or "cloudflare"). Both clients expose the same
+        list/find/create/update/delete_dns_record interface, so the rest of
+        this class (see _sync_record()) doesn't need to know which one it got."""
+        if provider == "cloudflare":
+            token = self.config.get("cloudflare_api_token", "")
+            if not token:
+                raise CloudflareError("No Cloudflare API token configured. Please set one up in Settings.")
+            return CloudflareClient(api_token=token)
         token = self.config.get("api_token", "")
         if not token:
             raise DomainChiefError("No API token configured. Please set one up in Settings.")
@@ -156,16 +173,25 @@ class DDNSService:
             self.last_run_at = _status_timestamp()
             return summary
 
-        try:
-            client = self._client()
-        except DomainChiefError as exc:
-            logger.error("Sync aborted: %s", exc)
-            self.last_run_error = str(exc)
-            for record in self.config["records"]:
-                record["last_status"] = "error"
-                record["last_error"] = str(exc)
-            self._save()
-            return summary
+        # One client per provider, built lazily and reused for every record of
+        # that provider in this run (instead of one client for the whole sync,
+        # like before Cloudflare support) - so a missing/invalid token for one
+        # provider only fails ITS records, not every record regardless of
+        # which provider they actually use.
+        clients: dict[str, Any] = {}
+        client_errors: dict[str, str] = {}
+
+        def _client_for(provider: str):
+            if provider in clients:
+                return clients[provider]
+            if provider in client_errors:
+                return None
+            try:
+                clients[provider] = self._client(provider)
+                return clients[provider]
+            except ProviderError as exc:
+                client_errors[provider] = str(exc)
+                return None
 
         any_change = False
         for record in self.config["records"]:
@@ -182,17 +208,28 @@ class DDNSService:
                 any_change = True
                 continue
 
+            provider = record.get("provider", "domainchief")
+            client = _client_for(provider)
+            if client is None:
+                msg = client_errors[provider]
+                logger.error("%s -> %s", self._record_label(record), msg)
+                record["last_status"] = "error"
+                record["last_error"] = msg
+                summary["errors"] += 1
+                any_change = True
+                continue
+
             try:
                 result = self._sync_record(client, record, current_ip)
                 summary[result] = summary.get(result, 0) + 1
                 any_change = True
-            except DomainChiefRateLimitError as exc:
+            except ProviderRateLimitError as exc:
                 logger.warning("Rate limit hit for %s, will retry on the next run.", self._record_label(record))
                 record["last_status"] = "error"
                 record["last_error"] = str(exc)
                 summary["errors"] += 1
                 any_change = True
-            except DomainChiefError as exc:
+            except ProviderError as exc:
                 logger.error("Error on %s: %s", self._record_label(record), exc)
                 record["last_status"] = "error"
                 record["last_error"] = str(exc)
@@ -200,7 +237,7 @@ class DDNSService:
                 any_change = True
 
         self.last_run_at = _status_timestamp()
-        self.last_run_error = None
+        self.last_run_error = "; ".join(f"{p}: {m}" for p, m in client_errors.items()) or None
         if any_change:
             self._save()
         logger.info(
@@ -214,8 +251,9 @@ class DDNSService:
         host = f"{record['name']}.{record['domain']}" if record.get("name") else record["domain"]
         return f"{host} ({record['type']})"
 
-    def _sync_record(self, client: DomainChiefClient, record: dict, current_ip: str) -> str:
+    def _sync_record(self, client, record: dict, current_ip: str) -> str:
         label = self._record_label(record)
+        proxied = bool(record.get("proxied", False))
         existing = None
         if record.get("dns_record_id"):
             # First try to find the known record directly (faster than scanning the list).
@@ -224,7 +262,7 @@ class DDNSService:
                     if candidate.id == record["dns_record_id"]:
                         existing = candidate
                         break
-            except DomainChiefError:
+            except ProviderError:
                 existing = None
         if existing is None:
             existing = client.find_dns_record(record["domain"], record.get("name", ""), record["type"])
@@ -237,6 +275,7 @@ class DDNSService:
                 ttl=record.get("ttl", 300),
                 name=record.get("name", ""),
                 comment=record.get("comment"),
+                proxied=proxied,
             )
             record["dns_record_id"] = created.id
             record["last_ip"] = current_ip
@@ -249,10 +288,16 @@ class DDNSService:
         record["dns_record_id"] = existing.id
         local_ttl = record.get("ttl", existing.ttl)
         local_comment = record.get("comment") or ""
-        # Don't compare only the IP, otherwise TTL/comment values changed via the
-        # Web UI (edit function) would only be sent to Domain Chief on the next IP
-        # change, instead of on the next sync.
-        if existing.content == current_ip and existing.ttl == local_ttl and (existing.comment or "") == local_comment:
+        existing_proxied = bool(getattr(existing, "proxied", False))
+        # Don't compare only the IP, otherwise TTL/comment/proxied values changed
+        # via the Web UI (edit function) would only be sent to the provider on
+        # the next IP change, instead of on the next sync.
+        if (
+            existing.content == current_ip
+            and existing.ttl == local_ttl
+            and (existing.comment or "") == local_comment
+            and existing_proxied == proxied
+        ):
             record["last_ip"] = current_ip
             record["last_status"] = "unchanged"
             record["last_error"] = None
@@ -266,7 +311,9 @@ class DDNSService:
             record_type=record["type"],
             content=current_ip,
             ttl=record.get("ttl", existing.ttl),
+            name=record.get("name", ""),
             comment=record.get("comment"),
+            proxied=proxied,
         )
         record["last_ip"] = current_ip
         record["last_status"] = "updated"
@@ -279,26 +326,47 @@ class DDNSService:
         return "updated"
 
     # ------------------------------------------------------------------
-    def update_record_and_resync(self, record_id: str, *, name: str, record_type: str, ttl: int, comment: str) -> dict:
+    def update_record_and_resync(
+        self,
+        record_id: str,
+        *,
+        name: str,
+        record_type: str,
+        ttl: int,
+        comment: str,
+        provider: str | None = None,
+        proxied: bool | None = None,
+    ) -> dict:
         """Called from the Web UI (edit record). If this changes the record's
-        identity (subdomain or type), the previous remote record at Domain
-        Chief (if any) is deleted, so no orphaned record is left behind - the
-        next sync then creates it fresh under the new identity. A missing/
-        invalid API token does not prevent the local save of the change, but
-        is logged."""
+        identity (subdomain, type or provider), the previous remote record
+        (if any) is deleted at its OLD provider, so no orphaned record is
+        left behind - the next sync then creates it fresh under the new
+        identity/provider. A missing/invalid API token does not prevent the
+        local save of the change, but is logged."""
         record = config_module.get_record(self.config, record_id)
         if record is None:
             raise KeyError(f"Unknown record: {record_id}")
-        identity_changed = record.get("name", "") != name or record["type"] != record_type
+        old_provider = record.get("provider", "domainchief")
+        new_provider = provider if provider in ("domainchief", "cloudflare") else old_provider
+        identity_changed = (
+            record.get("name", "") != name or record["type"] != record_type or old_provider != new_provider
+        )
         if identity_changed and record.get("dns_record_id"):
             try:
-                client = self._client()
+                client = self._client(old_provider)
                 client.delete_dns_record(record["domain"], record["dns_record_id"])
-                logger.info("%s: old record removed on Domain Chief (subdomain/type changed via edit)", self._record_label(record))
-            except DomainChiefError as exc:
-                logger.warning("Could not remove old record on Domain Chief after edit: %s", exc)
+                logger.info("%s: old record removed at %s (subdomain/type/provider changed via edit)", self._record_label(record), old_provider)
+            except ProviderError as exc:
+                logger.warning("Could not remove old record at %s after edit: %s", old_provider, exc)
         updated = config_module.update_record(
-            self.config, record_id, name=name, record_type=record_type, ttl=ttl, comment=comment
+            self.config,
+            record_id,
+            name=name,
+            record_type=record_type,
+            ttl=ttl,
+            comment=comment,
+            provider=new_provider,
+            proxied=proxied,
         )
         if updated is None:
             raise KeyError(f"Unknown record: {record_id}")
@@ -307,17 +375,17 @@ class DDNSService:
 
     # ------------------------------------------------------------------
     def delete_record_remote_and_local(self, record_id: str) -> None:
-        """Deletes a record both at Domain Chief and from the local configuration."""
+        """Deletes a record both at its DNS provider and from the local configuration."""
         record = config_module.get_record(self.config, record_id)
         if not record:
             raise KeyError(f"Unknown record: {record_id}")
         if record.get("dns_record_id"):
             try:
-                client = self._client()
+                client = self._client(record.get("provider", "domainchief"))
                 client.delete_dns_record(record["domain"], record["dns_record_id"])
-                logger.info("%s: record deleted on Domain Chief", self._record_label(record))
-            except DomainChiefError as exc:
-                logger.error("Could not delete record on Domain Chief: %s", exc)
+                logger.info("%s: record deleted at %s", self._record_label(record), record.get("provider", "domainchief"))
+            except ProviderError as exc:
+                logger.error("Could not delete record at %s: %s", record.get("provider", "domainchief"), exc)
                 raise
         config_module.remove_record(self.config, record_id)
         # Trigger an immediate sync, analogous to creating/editing - e.g. so that

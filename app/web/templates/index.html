@@ -47,6 +47,7 @@
     <table class="records" id="records-table">
       <thead>
         <tr>
+          <th>{{ t('dashboard.th_provider') }}</th>
           <th>{{ t('dashboard.th_host') }}</th>
           <th>{{ t('dashboard.th_type') }}</th>
           <th>{{ t('dashboard.th_ttl') }}</th>
@@ -60,7 +61,16 @@
       </thead>
       <tbody>
         {% for r in records %}
+        {% set is_cloudflare = r.provider == 'cloudflare' %}
+        {% set provider_name = 'Cloudflare' if is_cloudflare else 'Domain Chief' %}
+        {% set provider_icon = 'provider-cloudflare.svg' if is_cloudflare else 'etf-multiddns-logo.svg' %}
         <tr data-record-id="{{ r.id }}">
+          <td>
+            <img src="{{ url_for('static', filename=provider_icon) }}"
+                 alt="{{ provider_name }}"
+                 title="{{ provider_name }}{{ (' (' + t('new_record.label_proxied') + ')') if is_cloudflare and r.proxied else '' }}"
+                 class="provider-icon{{ '' if r.enabled else ' provider-icon-disabled' }}">
+          </td>
           <td>{{ (r.name + "." + r.domain) if r.name else r.domain }}</td>
           <td>{{ r.type }}</td>
           <td>{{ r.ttl }}</td>

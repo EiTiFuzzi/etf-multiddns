@@ -7,13 +7,15 @@
 # ETF-MultiDDNS
 
 A small Docker container that automatically updates A/AAAA records at [Domain Chief](https://domain.chief.app)
-to your current public IP address - similar to
-[cloudflare-ddns](https://github.com/timothymiller/cloudflare-ddns), just for Domain Chief instead of Cloudflare.
+and/or [Cloudflare](https://www.cloudflare.com/) to your current public IP address - similar to
+[cloudflare-ddns](https://github.com/timothymiller/cloudflare-ddns), just for both providers at once
+(each DNS record picks its own provider, so domains hosted at either one can be kept in sync side by side).
 
 Includes:
 
 - a background sync loop that checks your public IPv4/IPv6 address and automatically **creates**
   (if they don't exist yet) or **updates** (if the IP has changed) DNS records hosted at Domain Chief
+  and/or Cloudflare
 - a Web UI for creating, enabling/disabling and **deleting** records, and viewing status and logs
 - an optional CLI (`docker exec`) for managing via script/SSH
 
@@ -21,11 +23,14 @@ Includes:
 
 ## Requirements
 
+Only the provider(s) you actually plan to use need to be set up - Domain Chief and Cloudflare are both
+optional and independent of each other.
+
+### Domain Chief
+
 - The affected domain(s) must use **Hosted DNS** at Domain Chief (i.e. Domain Chief's nameservers
   are active). Without Hosted DNS, the API can't manage records.
 - A Domain Chief **Personal Access Token** (recommended for personal use) or a **Team Access Token**.
-
-### Create a token
 
 1. Personal Access Token: <https://domain.chief.app/api/token/create>
 2. Required scopes: `domainchief:dns:read`, `domainchief:dns:write`, and `domainchief:domains:read`
@@ -33,6 +38,19 @@ Includes:
 3. If your account has multiple teams and you don't want to use the default team: also set the team ID
    in the Web UI or via `DOMAINCHIEF_TEAM_ID`. Alternatively, use a **Team Access Token** (`ctt_...`)
    directly - that's automatically tied to a specific team.
+
+### Cloudflare
+
+- The affected domain(s) must exist as a **zone** in your Cloudflare account.
+- A Cloudflare **API Token** (scoped, not the legacy Global API Key) with permissions
+  `Zone:DNS:Edit` and `Zone:Zone:Read`, scoped to the zone(s)/domain(s) you want to manage.
+
+1. Create one at <https://dash.cloudflare.com/profile/api-tokens> -> "Create Token" -> "Edit zone DNS"
+   template (adjust the zone resource to the domain(s) you want to manage).
+2. Enter it in the Web UI under **Settings -> Cloudflare**, or set it via `CLOUDFLARE_API_TOKEN`.
+3. Optionally enable **"Proxied" (orange cloud)** per record when creating/editing it - routes the
+   record through Cloudflare's proxy (performance/DDoS protection, hides the real IP) instead of
+   pointing directly at the public IP ("DNS only", grey cloud).
 
 ## Start with Docker Compose (pre-built image)
 
@@ -44,11 +62,11 @@ docker compose up -d
 ```
 
 The Web UI is then reachable at `http://<host>:8080`. If no token was set via an environment variable,
-you can enter it there under **Settings** - including a "Test connection" button.
+you can enter it there under **Settings** - including a "Test connection" button for each provider.
 It's optionally also reachable encrypted via `https://<host>:8443` once enabled under **Settings ->
 HTTPS** (see below) - both ports work in parallel.
 
-The configuration (token if set via the UI, team ID, records, status) lives in `./config/config.json`
+The configuration (tokens if set via the UI, team ID, records, status) lives in `./config/config.json`
 and survives container restarts, since the folder is mounted as a volume.
 
 ## Start with plain `docker run` (pre-built image, no build needed)
@@ -60,33 +78,40 @@ docker run -d \
   -p 8080:8080 \
   -p 8443:8443 \
   -e DOMAINCHIEF_API_TOKEN=ctp_your_token \
+  -e CLOUDFLARE_API_TOKEN=your_cloudflare_token \
   -e CHECK_INTERVAL=300 \
   -v $(pwd)/config:/config \
   ghcr.io/<your-github-name-lowercased>/etf-multiddns:latest
 ```
 
-(Drop the `-p 8443:8443` line if you don't plan on enabling HTTPS and don't want the port exposed.)
+(Drop the `-p 8443:8443` line if you don't plan on enabling HTTPS and don't want the port exposed. Omit
+whichever of the two `*_API_TOKEN` variables you don't need - both are optional and independent, see
+"Requirements" above.)
 
 ## Managing records
 
 ### Via the Web UI
 
 - **Dashboard** (`/`): shows the currently detected public IPv4/IPv6, the time of the last sync, and
-  the status of each managed record (unchanged / created / updated / error). A button lets you trigger
-  an immediate sync without waiting for the interval. The "Add record" button leads to the create/edit
-  form (no longer a separate menu item); in the record list, the pencil icon opens the same form in
-  edit mode.
-- **Add/edit record** (`/records/new` or `/records/<id>/edit`, a shared form): enter domain, subdomain
-  (empty = root domain, e.g. just `example.com`), type (A/AAAA), TTL, and comment. When creating: if a
-  matching record already exists at Domain Chief, it is adopted on the next sync (not created twice).
-  When editing, only the domain is fixed (delete and recreate the record for that) - subdomain, type,
-  TTL, and comment can be changed. If subdomain or type is changed, the next sync automatically creates
-  a new DNS record at Domain Chief and removes the old one; plain TTL/comment changes are likewise only
-  applied on the next sync.
+  the status of each managed record (unchanged / created / updated / error), together with the provider
+  it's synced to. A button lets you trigger an immediate sync without waiting for the interval. The
+  "Add record" button leads to the create/edit form (no longer a separate menu item); in the record
+  list, the pencil icon opens the same form in edit mode.
+- **Add/edit record** (`/records/new` or `/records/<id>/edit`, a shared form): choose the DNS provider
+  (Domain Chief or Cloudflare - each record picks its own, both can be used at the same time), then
+  enter domain, subdomain (empty = root domain, e.g. just `example.com`), type (A/AAAA), TTL, comment,
+  and - for Cloudflare records - whether it should be **proxied** (orange cloud). When creating: if a
+  matching record already exists at the chosen provider, it is adopted on the next sync (not created
+  twice). When editing, only the domain and subdomain are fixed (delete and recreate the record for
+  that) - provider, type, TTL, comment, and proxied status can all be changed. If the provider or type
+  is changed, the next sync automatically creates a new DNS record at the (new) provider and removes the
+  old one at the provider it used to be at; plain TTL/comment/proxied changes are likewise only applied
+  on the next sync.
 - **Delete**: the trash-can button in the record list deletes the record both from the local
-  configuration and directly at Domain Chief via the API.
-- **Settings** (`/settings`): API token, team ID, check interval, timezone, and date/time format (for
-  displaying timestamps), as well as the Web UI credentials (username/password).
+  configuration and directly at its provider via the API.
+- **Settings** (`/settings`): API tokens for both providers, team ID (Domain Chief), check interval,
+  timezone, and date/time format (for displaying timestamps), as well as the Web UI credentials
+  (username/password).
 - **Logs** (`/logs`): the most recent log lines from the sync loop.
 
 ### Login, appearance & language
@@ -162,23 +187,30 @@ existing Web UI credentials.
 ```bash
 docker exec -it etf-multiddns python -m app.cli list
 docker exec -it etf-multiddns python -m app.cli add --domain example.com --name home --type A --ttl 300
+docker exec -it etf-multiddns python -m app.cli add --domain example.org --name vpn --type A --provider cloudflare --proxied
 docker exec -it etf-multiddns python -m app.cli remove <record-id>
 docker exec -it etf-multiddns python -m app.cli sync
 ```
+
+`--provider` defaults to `domainchief`; pass `--provider cloudflare` (optionally with `--proxied`) for a
+Cloudflare-managed record.
 
 ## How it works
 
 1. Every `CHECK_INTERVAL` seconds (default 300, minimum 60), the current public IPv4 (via
    `api.ipify.org`, with fallbacks) and/or IPv6 is determined - depending on whether A and/or AAAA
    records are configured.
-2. For each active record, Domain Chief is checked to see whether a DNS record with a matching name +
-   type already exists.
-   - **None exists:** the record is newly created via the API (`POST /domains/{domain}/dns/records`).
-   - **One exists, but with different content:** the record is updated
-     (`PUT /domains/{domain}/dns/records/{id}`).
-   - **Content already matches:** nothing happens (no unnecessary API call).
-3. Rate limits (HTTP 429) from the Domain Chief API are respected (`Retry-After` header) and retried
-   automatically with backoff.
+2. For each active record, its configured provider (Domain Chief or Cloudflare) is checked to see
+   whether a DNS record with a matching name + type already exists there. Each provider is only
+   contacted for the records that actually use it - a missing/invalid token for one provider only
+   affects its own records, not the other provider's.
+   - **None exists:** the record is newly created via the provider's API (Domain Chief:
+     `POST /domains/{domain}/dns/records`; Cloudflare: `POST /zones/{zone_id}/dns_records`).
+   - **One exists, but with different content/TTL/comment/proxied status:** the record is updated
+     (`PUT .../dns_records/{id}` at either provider).
+   - **Everything already matches:** nothing happens (no unnecessary API call).
+3. Rate limits (HTTP 429) from either API are respected (`Retry-After` header where available) and
+   retried automatically with backoff.
 
 ## Security notes
 
@@ -198,28 +230,35 @@ docker exec -it etf-multiddns python -m app.cli sync
 - The password is not stored in plain text, but as a hash (`werkzeug.security`, scrypt). The same
   applies to 2FA recovery codes; the TOTP secret itself is stored as-is (it must be, to compute/verify
   codes), so `config/config.json` should be treated as sensitive either way.
-- The API token is stored locally in `config/config.json` when set via the Web UI. If it's set via an
-  environment variable instead, that takes precedence and the fields in the Web UI are disabled. The
-  same applies analogously to the Web UI credentials and `WEBUI_USERNAME` / `WEBUI_PASSWORD`.
+- Both API tokens are stored locally in `config/config.json` when set via the Web UI. If a token is set
+  via an environment variable instead (`DOMAINCHIEF_API_TOKEN` / `CLOUDFLARE_API_TOKEN`), that takes
+  precedence and the corresponding field in the Web UI is disabled. The same applies analogously to the
+  Web UI credentials and `WEBUI_USERNAME` / `WEBUI_PASSWORD`.
 
 ## Known limitations
 
-- The Domain Chief API doesn't have a PATCH for records - an update replaces type, content, and TTL
-  entirely (the client handles this correctly and automatically).
-- Only A and AAAA records are actively managed by this tool as a "DDNS target". The API itself
-  supports further types (CNAME, MX, TXT, ALIAS, CAA, SRV, TLSA, NS), which aren't needed here though.
-- There is no test mode for the Domain Chief API - changes to real domains go live immediately. To
-  experiment, Domain Chief offers free `.example` domains.
+- Neither the Domain Chief nor the Cloudflare API has a PATCH for records - an update replaces type,
+  content, and TTL (and, for Cloudflare, name/proxied) entirely (both clients handle this correctly and
+  automatically).
+- Only A and AAAA records are actively managed by this tool as a "DDNS target". Both APIs support
+  further types, which aren't needed here though.
+- There is no test mode for either API - changes to real domains go live immediately. To experiment,
+  Domain Chief offers free `.example` domains; Cloudflare lets you add a low-stakes test domain/zone.
 - The bot/abuse protection in front of `domain.chief.app` blocks requests using the `requests`
   library's default User-Agent (`python-requests/x.y`) with a plain text response `Bad Request` (not
   JSON, doesn't come from the Domain Chief API itself). The client therefore deliberately sets a
   different User-Agent (`curl/8.4.0`), which is demonstrably let through.
+- A Cloudflare API token must be scoped to the zone(s) it should manage (`Zone:DNS:Edit` +
+  `Zone:Zone:Read`); a token without access to a given domain's zone will fail with a clear "no zone
+  found" error rather than silently doing nothing.
 
 ## Sources
 
 - [Domain Chief - developer documentation](https://docs.chief.tools/domainchief/developers/build-with-domain-chief)
+- [Cloudflare DNS API reference](https://developers.cloudflare.com/api/operations/dns-records-for-a-zone-list-dns-records)
 - [Domain Chief API reference (OpenAPI)](https://docs.chief.tools/api/domainchief)
 - [Create a Personal Access Token](https://domain.chief.app/api/token/create)
+- [Create a Cloudflare API Token](https://dash.cloudflare.com/profile/api-tokens)
 
 ---
 
