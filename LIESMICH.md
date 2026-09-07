@@ -6,6 +6,13 @@
 
 # ETF-MultiDDNS
 
+<p align="center">
+  <a href="https://github.com/EiTiFuzzi/etf-multiddns/releases/latest"><img src="https://img.shields.io/github/v/release/EiTiFuzzi/etf-multiddns?sort=semver&label=release" alt="Neueste Version"></a>
+  <a href="https://github.com/EiTiFuzzi/etf-multiddns/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/EiTiFuzzi/etf-multiddns/ci.yml?branch=main&label=CI" alt="CI-Status"></a>
+  <a href="https://github.com/EiTiFuzzi/etf-multiddns/pkgs/container/etf-multiddns"><img src="https://img.shields.io/badge/ghcr.io-etf--multiddns-blue?logo=docker&logoColor=white" alt="Container-Image auf ghcr.io"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/github/license/EiTiFuzzi/etf-multiddns" alt="Lizenz"></a>
+</p>
+
 Ein kleiner Docker-Container, der A/AAAA-Records bei [Domain Chief](https://domain.chief.app)
 und/oder [Cloudflare](https://www.cloudflare.com/) automatisch auf die aktuelle öffentliche IP-Adresse
 aktualisiert - ähnlich wie [cloudflare-ddns](https://github.com/timothymiller/cloudflare-ddns), nur für
