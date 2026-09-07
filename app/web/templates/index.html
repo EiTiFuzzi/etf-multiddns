@@ -78,6 +78,7 @@
           <th class="sortable" data-sort-key="provider" tabindex="0" role="button">{{ t('dashboard.th_provider') }}<span class="sort-indicator"></span></th>
           <th class="sortable" data-sort-key="host" tabindex="0" role="button">{{ t('dashboard.th_host') }}<span class="sort-indicator"></span></th>
           <th class="sortable" data-sort-key="type" tabindex="0" role="button">{{ t('dashboard.th_type') }}<span class="sort-indicator"></span></th>
+          <th>{{ t('dashboard.th_proxy_status') }}</th>
           <th class="sortable" data-sort-key="ttl" tabindex="0" role="button">{{ t('dashboard.th_ttl') }}<span class="sort-indicator"></span></th>
           <th class="sortable" data-sort-key="ip" tabindex="0" role="button">{{ t('dashboard.th_current_ip') }}<span class="sort-indicator"></span></th>
           <th class="sortable" data-sort-key="status" tabindex="0" role="button">{{ t('dashboard.th_status') }}<span class="sort-indicator"></span></th>
@@ -110,6 +111,27 @@
           </td>
           <td>{{ host_text }}</td>
           <td>{{ r.type }}</td>
+          <td class="col-proxy-status">
+            {% if is_cloudflare %}
+              {% if r.proxied %}
+                <span class="proxy-status proxy-status-proxied">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="#f6821f" aria-hidden="true" class="proxy-status-icon">
+                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+                  </svg>
+                  {{ t('dashboard.proxy_status_proxied') }}
+                </span>
+              {% else %}
+                <span class="proxy-status proxy-status-dns-only">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" class="proxy-status-icon">
+                    <path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96z"/>
+                  </svg>
+                  {{ t('dashboard.proxy_status_dns_only') }}
+                </span>
+              {% endif %}
+            {% else %}
+              <span class="proxy-status-na">&ndash;</span>
+            {% endif %}
+          </td>
           <td>{{ r.ttl }}</td>
           <td class="col-current-ip">{{ r.last_ip or "-" }}</td>
           <td>
@@ -118,9 +140,13 @@
           </td>
           <td class="col-last-sync">{{ format_ts(r.last_sync_at) or "-" }}</td>
           <td>
-            <form method="post" action="{{ url_for('toggle_record', record_id=r.id) }}" class="inline-form"
-                  {{ ('onsubmit="return confirm(\'' + t('dashboard.confirm_disable') + '\');"') | safe if r.enabled else '' }}>
-              <button type="submit" class="btn btn-small">{{ t('dashboard.btn_on') if r.enabled else t('dashboard.btn_off') }}</button>
+            <form method="post" action="{{ url_for('toggle_record', record_id=r.id) }}" class="inline-form toggle-form">
+              <label class="switch" title="{{ t('dashboard.btn_on') if r.enabled else t('dashboard.btn_off') }}">
+                <input type="checkbox" class="switch-input" {{ 'checked' if r.enabled else '' }}
+                       aria-label="{{ t('dashboard.th_active') }}: {{ host_text }}"
+                       data-confirm-message="{{ t('dashboard.confirm_disable') }}">
+                <span class="switch-track"><span class="switch-thumb"></span></span>
+              </label>
             </form>
           </td>
           <td>
@@ -134,13 +160,18 @@
           <td>
             <form method="post" action="{{ url_for('delete_record', record_id=r.id) }}" class="inline-form"
                   onsubmit="return confirm('{{ t('dashboard.confirm_delete') }}');">
-              <button type="submit" class="btn btn-danger btn-small">{{ t('dashboard.btn_delete') }}</button>
+              <button type="submit" class="btn btn-small btn-icon btn-danger"
+                      title="{{ t('dashboard.btn_delete') }}" aria-label="{{ t('dashboard.btn_delete') }}">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                  <path d="M9 3a1 1 0 0 0-1 1v1H4.5a1 1 0 0 0 0 2H5v13a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7h.5a1 1 0 0 0 0-2H15V4a1 1 0 0 0-1-1H9zm1 2h4v1h-4V5zM7 7h10v13H7V7zm2 2v9h2V9H9zm4 0v9h2V9h-2z"/>
+                </svg>
+              </button>
             </form>
           </td>
         </tr>
         {% endfor %}
         <tr id="no-matches-row" hidden>
-          <td colspan="10">{{ t('dashboard.no_matches') }}</td>
+          <td colspan="11">{{ t('dashboard.no_matches') }}</td>
         </tr>
       </tbody>
     </table>
@@ -156,6 +187,8 @@
       var STATUS_LABELS = {{ status_labels|tojson }};
       var UNKNOWN = {{ t('dashboard.unknown')|tojson }};
       var NEVER = {{ t('dashboard.never')|tojson }};
+      var ON_LABEL = {{ t('dashboard.btn_on')|tojson }};
+      var OFF_LABEL = {{ t('dashboard.btn_off')|tojson }};
 
       var table = document.getElementById('records-table');
       var tbody = table ? table.querySelector('tbody') : null;
@@ -211,6 +244,18 @@
           row.dataset.status = r.last_status || '';
           row.dataset.sync = r.last_sync_at_raw || '';
           row.dataset.active = r.enabled ? '1' : '0';
+
+          // Keep the On/Off switch in sync too - e.g. after a toggle from
+          // another browser tab, or once a background sync creates the
+          // record for a freshly re-enabled one.
+          var toggleInput = row.querySelector('.switch-input');
+          if (toggleInput) {
+            toggleInput.checked = !!r.enabled;
+            var switchLabel = toggleInput.closest('.switch');
+            if (switchLabel) switchLabel.title = r.enabled ? ON_LABEL : OFF_LABEL;
+          }
+          var providerIcon = row.querySelector('.provider-icon');
+          if (providerIcon) providerIcon.classList.toggle('provider-icon-disabled', !r.enabled);
         });
 
         applyFilter();
@@ -347,6 +392,26 @@
       }
 
       applyFilter();
+
+      // ---- On/Off switch ----
+      // The switch has no submit button of its own - toggling it submits its
+      // form right away. Turning a record OFF actually deletes its DNS
+      // record at the provider (see dashboard.confirm_disable), so that
+      // direction is confirmed first; turning it back ON submits
+      // immediately. A cancelled confirm reverts the switch instead of
+      // leaving it in a state that was never actually submitted.
+      Array.prototype.forEach.call(document.querySelectorAll('.toggle-form .switch-input'), function (input) {
+        input.addEventListener('change', function () {
+          if (!input.checked) {
+            var message = input.getAttribute('data-confirm-message');
+            if (!confirm(message)) {
+              input.checked = true;
+              return;
+            }
+          }
+          input.form.submit();
+        });
+      });
     })();
   </script>
 {% endblock %}

@@ -100,7 +100,9 @@ whichever of the two `*_API_TOKEN` variables you don't need - both are optional 
   column header (Provider, Host, Type, TTL, Current IP, Status, Last sync, Active - click again to
   reverse the order) and filtered with the search box and dropdowns above it (host name, provider, type,
   status, active/inactive); filters stay in effect across the automatic refresh, sorting is left as you
-  set it.
+  set it. A "Proxy Status" column shows, for Cloudflare records, whether the record is **proxied**
+  (orange cloud, "Proxied") or **DNS only** (grey cloud) - styled after Cloudflare's own dashboard; it's
+  blank for Domain Chief records, which have no such concept.
 - **Add/edit record** (`/records/new` or `/records/<id>/edit`, a shared form): choose the DNS provider
   (Domain Chief or Cloudflare - each record picks its own, both can be used at the same time), then
   enter domain, subdomain (empty = root domain, e.g. just `example.com`), type (A/AAAA), TTL, comment,
@@ -119,7 +121,7 @@ whichever of the two `*_API_TOKEN` variables you don't need - both are optional 
   management already marked as up to date (no DNS change happens at the provider - it already had the
   right content), so they immediately show status "unchanged" instead of waiting for the next sync.
   Records already managed here, or whose content doesn't currently match your public IP, aren't offered.
-- **On/Off**: the button in the "Active" column disables/enables a record. Turning a record off
+- **On/Off**: the toggle switch in the "Active" column disables/enables a record. Turning a record off
   deletes its DNS record at the provider (so the hostname stops resolving instead of quietly sticking
   around, unmanaged, at whatever IP it was last updated to), but keeps the entry - and its configuration
   - in this list. Turning it back on recreates the DNS record at the provider on the next sync (triggered

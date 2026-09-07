@@ -105,7 +105,10 @@ optional und unabhängig voneinander, siehe "Voraussetzungen" oben.)
   Spaltenüberschrift sortieren (Provider, Host, Typ, TTL, Aktuelle IP, Status, Letzter Abgleich, Aktiv -
   erneuter Klick kehrt die Reihenfolge um) und über das Suchfeld sowie die Dropdowns darüber filtern
   (Hostname, Provider, Typ, Status, aktiv/inaktiv); Filter bleiben auch über die automatische
-  Aktualisierung hinweg erhalten, die Sortierung wird nicht automatisch verändert.
+  Aktualisierung hinweg erhalten, die Sortierung wird nicht automatisch verändert. Eine Spalte
+  "Proxy-Status" zeigt bei Cloudflare-Records, ob der Record **proxied** ist (orange Wolke, "Mit Proxy")
+  oder **nur DNS** (graue Wolke) - im Stil des Cloudflare-Dashboards; bei Domain-Chief-Records bleibt sie
+  leer, da es dieses Konzept dort nicht gibt.
 - **Record hinzufügen/bearbeiten** (`/records/new` bzw. `/records/<id>/edit`, ein gemeinsames Formular):
   zuerst den DNS-Provider wählen (Domain Chief oder Cloudflare - jeder Record wählt seinen eigenen,
   beide können gleichzeitig genutzt werden), dann Domain, Subdomain (leer = Root-Domain, z.B. nur
@@ -126,7 +129,7 @@ optional und unabhängig voneinander, siehe "Voraussetzungen" oben.)
   auf die richtige IP), zeigen also sofort den Status "unverändert" statt erst auf den nächsten Abgleich
   zu warten. Bereits verwaltete Records sowie Records, deren Inhalt gerade nicht der eigenen öffentlichen
   IP entspricht, werden nicht angeboten.
-- **An/Aus**: Der Button in der Spalte "Aktiv" deaktiviert/aktiviert einen Record. Wird ein Record
+- **An/Aus**: Der Schalter (Toggle) in der Spalte "Aktiv" deaktiviert/aktiviert einen Record. Wird ein Record
   ausgeschaltet, wird sein DNS-Record beim Provider gelöscht (die Subdomain löst also nicht mehr auf,
   statt unbemerkt mit der zuletzt eingetragenen IP bestehen zu bleiben) - der Eintrag samt Konfiguration
   bleibt aber in dieser Liste erhalten. Wird er wieder eingeschaltet, legt der nächste Abgleich (sofort
