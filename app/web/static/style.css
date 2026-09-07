@@ -365,6 +365,31 @@ h1 { margin-top: 0; }
   overflow-x: auto;
 }
 
+.table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.table-toolbar input[type="search"],
+.table-toolbar select {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.table-toolbar input[type="search"] {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.table-toolbar select { flex: 0 0 auto; }
+
 table.records {
   width: 100%;
   min-width: 680px;
@@ -379,6 +404,31 @@ table.records th, table.records td {
   font-size: 0.9rem;
 }
 
+table.records th.sortable {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+table.records th.sortable:hover { color: var(--accent); }
+
+.sort-indicator::after {
+  content: "↕";
+  opacity: 0.4;
+  margin-left: 0.25rem;
+  font-size: 0.75em;
+  display: inline-block;
+}
+
+th.sort-asc .sort-indicator::after { content: "▲"; opacity: 1; }
+th.sort-desc .sort-indicator::after { content: "▼"; opacity: 1; }
+
+#no-matches-row td {
+  text-align: center;
+  color: var(--muted);
+  padding: 1.2rem 0.5rem;
+}
+
 .status {
   padding: 0.15rem 0.5rem;
   border-radius: 6px;
@@ -390,6 +440,7 @@ table.records th, table.records td {
 .status-updated, .status-created { background: var(--accent-bg); color: var(--accent); }
 .status-error { background: var(--red-bg); color: var(--red); }
 .status-pending { background: var(--yellow-bg); color: var(--yellow); }
+.status-disabled { background: var(--bg-panel-2); color: var(--muted); }
 
 .error-text { color: var(--red); font-size: 0.75rem; margin-top: 0.2rem; }
 

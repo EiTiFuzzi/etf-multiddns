@@ -43,18 +43,46 @@
   {% if not records %}
     <p class="empty">{{ t('dashboard.no_records') }} <a href="{{ url_for('new_record_form') }}">{{ t('dashboard.no_records_cta') }}</a>.</p>
   {% else %}
+    <div class="table-toolbar">
+      <input type="search" id="filter-search" placeholder="{{ t('dashboard.filter_search') }}" aria-label="{{ t('dashboard.filter_search') }}">
+      <select id="filter-provider" aria-label="{{ t('dashboard.th_provider') }}">
+        <option value="">{{ t('dashboard.filter_all') }}</option>
+        <option value="domainchief">Domain Chief</option>
+        <option value="cloudflare">Cloudflare</option>
+      </select>
+      <select id="filter-type" aria-label="{{ t('dashboard.th_type') }}">
+        <option value="">{{ t('dashboard.filter_all') }}</option>
+        <option value="A">A</option>
+        <option value="AAAA">AAAA</option>
+      </select>
+      <select id="filter-status" aria-label="{{ t('dashboard.th_status') }}">
+        <option value="">{{ t('dashboard.filter_all') }}</option>
+        <option value="unchanged">{{ t('status.unchanged') }}</option>
+        <option value="created">{{ t('status.created') }}</option>
+        <option value="updated">{{ t('status.updated') }}</option>
+        <option value="error">{{ t('status.error') }}</option>
+        <option value="pending">{{ t('status.pending') }}</option>
+        <option value="disabled">{{ t('status.disabled') }}</option>
+      </select>
+      <select id="filter-active" aria-label="{{ t('dashboard.th_active') }}">
+        <option value="">{{ t('dashboard.filter_all') }}</option>
+        <option value="1">{{ t('dashboard.btn_on') }}</option>
+        <option value="0">{{ t('dashboard.btn_off') }}</option>
+      </select>
+      <button type="button" id="filter-reset" class="btn btn-small">{{ t('dashboard.filter_reset') }}</button>
+    </div>
     <div class="table-scroll">
     <table class="records" id="records-table">
       <thead>
         <tr>
-          <th>{{ t('dashboard.th_provider') }}</th>
-          <th>{{ t('dashboard.th_host') }}</th>
-          <th>{{ t('dashboard.th_type') }}</th>
-          <th>{{ t('dashboard.th_ttl') }}</th>
-          <th>{{ t('dashboard.th_current_ip') }}</th>
-          <th>{{ t('dashboard.th_status') }}</th>
-          <th>{{ t('dashboard.th_last_sync') }}</th>
-          <th>{{ t('dashboard.th_active') }}</th>
+          <th class="sortable" data-sort-key="provider" tabindex="0" role="button">{{ t('dashboard.th_provider') }}<span class="sort-indicator"></span></th>
+          <th class="sortable" data-sort-key="host" tabindex="0" role="button">{{ t('dashboard.th_host') }}<span class="sort-indicator"></span></th>
+          <th class="sortable" data-sort-key="type" tabindex="0" role="button">{{ t('dashboard.th_type') }}<span class="sort-indicator"></span></th>
+          <th class="sortable" data-sort-key="ttl" tabindex="0" role="button">{{ t('dashboard.th_ttl') }}<span class="sort-indicator"></span></th>
+          <th class="sortable" data-sort-key="ip" tabindex="0" role="button">{{ t('dashboard.th_current_ip') }}<span class="sort-indicator"></span></th>
+          <th class="sortable" data-sort-key="status" tabindex="0" role="button">{{ t('dashboard.th_status') }}<span class="sort-indicator"></span></th>
+          <th class="sortable" data-sort-key="sync" tabindex="0" role="button">{{ t('dashboard.th_last_sync') }}<span class="sort-indicator"></span></th>
+          <th class="sortable" data-sort-key="active" tabindex="0" role="button">{{ t('dashboard.th_active') }}<span class="sort-indicator"></span></th>
           <th></th>
           <th></th>
         </tr>
@@ -64,14 +92,23 @@
         {% set is_cloudflare = r.provider == 'cloudflare' %}
         {% set provider_name = 'Cloudflare' if is_cloudflare else 'Domain Chief' %}
         {% set provider_icon = 'provider-cloudflare.svg' if is_cloudflare else 'etf-multiddns-logo.svg' %}
-        <tr data-record-id="{{ r.id }}">
+        {% set host_text = (r.name + "." + r.domain) if r.name else r.domain %}
+        <tr data-record-id="{{ r.id }}"
+            data-provider="{{ r.provider }}"
+            data-host="{{ host_text }}"
+            data-type="{{ r.type }}"
+            data-ttl="{{ r.ttl }}"
+            data-ip="{{ r.last_ip or '' }}"
+            data-status="{{ r.last_status }}"
+            data-sync="{{ r.last_sync_at or '' }}"
+            data-active="{{ '1' if r.enabled else '0' }}">
           <td>
             <img src="{{ url_for('static', filename=provider_icon) }}"
                  alt="{{ provider_name }}"
                  title="{{ provider_name }}{{ (' (' + t('new_record.label_proxied') + ')') if is_cloudflare and r.proxied else '' }}"
                  class="provider-icon{{ '' if r.enabled else ' provider-icon-disabled' }}">
           </td>
-          <td>{{ (r.name + "." + r.domain) if r.name else r.domain }}</td>
+          <td>{{ host_text }}</td>
           <td>{{ r.type }}</td>
           <td>{{ r.ttl }}</td>
           <td class="col-current-ip">{{ r.last_ip or "-" }}</td>
@@ -81,7 +118,8 @@
           </td>
           <td class="col-last-sync">{{ format_ts(r.last_sync_at) or "-" }}</td>
           <td>
-            <form method="post" action="{{ url_for('toggle_record', record_id=r.id) }}" class="inline-form">
+            <form method="post" action="{{ url_for('toggle_record', record_id=r.id) }}" class="inline-form"
+                  {{ ('onsubmit="return confirm(\'' + t('dashboard.confirm_disable') + '\');"') | safe if r.enabled else '' }}>
               <button type="submit" class="btn btn-small">{{ t('dashboard.btn_on') if r.enabled else t('dashboard.btn_off') }}</button>
             </form>
           </td>
@@ -101,6 +139,9 @@
           </td>
         </tr>
         {% endfor %}
+        <tr id="no-matches-row" hidden>
+          <td colspan="10">{{ t('dashboard.no_matches') }}</td>
+        </tr>
       </tbody>
     </table>
     </div>
@@ -115,6 +156,10 @@
       var STATUS_LABELS = {{ status_labels|tojson }};
       var UNKNOWN = {{ t('dashboard.unknown')|tojson }};
       var NEVER = {{ t('dashboard.never')|tojson }};
+
+      var table = document.getElementById('records-table');
+      var tbody = table ? table.querySelector('tbody') : null;
+      var noMatchesRow = document.getElementById('no-matches-row');
 
       function applyStatus(data) {
         var ipv4El = document.getElementById('card-ipv4');
@@ -156,7 +201,19 @@
               errDiv.hidden = true;
             }
           }
+
+          // Keep the sort/filter data attributes in sync with the live values
+          // (see applyFilter() below) so a filter stays accurate after a poll.
+          // Sort order is deliberately NOT re-applied here - re-sorting on
+          // every 4s poll would jarringly reorder rows while someone is
+          // looking at the table; the user re-sorts by clicking a header.
+          row.dataset.ip = r.last_ip || '';
+          row.dataset.status = r.last_status || '';
+          row.dataset.sync = r.last_sync_at_raw || '';
+          row.dataset.active = r.enabled ? '1' : '0';
         });
+
+        applyFilter();
       }
 
       function refreshDashboard() {
@@ -167,6 +224,129 @@
       }
 
       setInterval(refreshDashboard, 4000);
+
+      // ---- Sorting ----
+      // Column headers with data-sort-key toggle ascending/descending on
+      // click; sorting only reorders <tr> elements (never removes them), so
+      // it stays compatible with the polling refresh above and with
+      // applyFilter()'s hidden-attribute-based filtering below.
+      var currentSort = { key: null, dir: 1 };
+
+      function ipSortKey(value) {
+        if (!value) return '';
+        var m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(value);
+        if (!m) return value.toLowerCase();
+        return [m[1], m[2], m[3], m[4]].map(function (part) {
+          return ('000' + part).slice(-3);
+        }).join('.');
+      }
+
+      function sortValueFor(row, key) {
+        switch (key) {
+          case 'ttl':
+            return parseInt(row.dataset.ttl, 10) || 0;
+          case 'active':
+            return row.dataset.active === '1' ? 1 : 0;
+          case 'sync':
+            var parsed = Date.parse(row.dataset.sync || '');
+            return isNaN(parsed) ? -Infinity : parsed;
+          case 'ip':
+            return ipSortKey(row.dataset.ip || '');
+          case 'status':
+            var raw = row.dataset.status || '';
+            return (STATUS_LABELS[raw] || raw).toLowerCase();
+          default:
+            return (row.dataset[key] || '').toLowerCase();
+        }
+      }
+
+      function applySort() {
+        if (!currentSort.key || !tbody) return;
+        var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr[data-record-id]'));
+        rows.sort(function (a, b) {
+          var av = sortValueFor(a, currentSort.key);
+          var bv = sortValueFor(b, currentSort.key);
+          if (av < bv) return -1 * currentSort.dir;
+          if (av > bv) return 1 * currentSort.dir;
+          return 0;
+        });
+        rows.forEach(function (row) { tbody.appendChild(row); });
+        if (noMatchesRow) tbody.appendChild(noMatchesRow);
+      }
+
+      var sortHeaders = table ? Array.prototype.slice.call(table.querySelectorAll('th.sortable')) : [];
+      sortHeaders.forEach(function (th) {
+        function activate() {
+          var key = th.getAttribute('data-sort-key');
+          if (currentSort.key === key) {
+            currentSort.dir *= -1;
+          } else {
+            currentSort.key = key;
+            currentSort.dir = 1;
+          }
+          sortHeaders.forEach(function (h) { h.classList.remove('sort-asc', 'sort-desc'); });
+          th.classList.add(currentSort.dir === 1 ? 'sort-asc' : 'sort-desc');
+          applySort();
+        }
+        th.addEventListener('click', activate);
+        th.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            activate();
+          }
+        });
+      });
+
+      // ---- Filtering ----
+      // Re-applied on every poll (applyStatus() above) so it always reflects
+      // current data, but never changes row order.
+      var searchInput = document.getElementById('filter-search');
+      var providerSelect = document.getElementById('filter-provider');
+      var typeSelect = document.getElementById('filter-type');
+      var statusSelect = document.getElementById('filter-status');
+      var activeSelect = document.getElementById('filter-active');
+      var resetButton = document.getElementById('filter-reset');
+
+      function applyFilter() {
+        if (!tbody) return;
+        var search = ((searchInput && searchInput.value) || '').trim().toLowerCase();
+        var provider = providerSelect ? providerSelect.value : '';
+        var type = typeSelect ? typeSelect.value : '';
+        var status = statusSelect ? statusSelect.value : '';
+        var active = activeSelect ? activeSelect.value : '';
+        var visibleCount = 0;
+
+        Array.prototype.forEach.call(tbody.querySelectorAll('tr[data-record-id]'), function (row) {
+          var matches =
+            (!search || (row.dataset.host || '').toLowerCase().indexOf(search) !== -1) &&
+            (!provider || row.dataset.provider === provider) &&
+            (!type || row.dataset.type === type) &&
+            (!status || row.dataset.status === status) &&
+            (!active || row.dataset.active === active);
+          row.hidden = !matches;
+          if (matches) visibleCount += 1;
+        });
+
+        if (noMatchesRow) noMatchesRow.hidden = visibleCount !== 0;
+      }
+
+      [searchInput, providerSelect, typeSelect, statusSelect, activeSelect].forEach(function (el) {
+        if (!el) return;
+        el.addEventListener('input', applyFilter);
+        el.addEventListener('change', applyFilter);
+      });
+
+      if (resetButton) {
+        resetButton.addEventListener('click', function () {
+          if (searchInput) searchInput.value = '';
+          [providerSelect, typeSelect, statusSelect, activeSelect].forEach(function (el) {
+            if (el) el.value = '';
+          });
+          applyFilter();
+        });
+      }
+
+      applyFilter();
     })();
   </script>
 {% endblock %}

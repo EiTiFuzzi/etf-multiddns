@@ -101,7 +101,11 @@ optional und unabhängig voneinander, siehe "Voraussetzungen" oben.)
   zusammen mit dem Provider, mit dem er synchronisiert wird. Ein Button erlaubt das sofortige Anstoßen
   eines Abgleichs, ohne auf das Intervall zu warten. Über den Button "Record hinzufügen" gelangt man
   zum Anlegen-/Bearbeiten-Formular (kein eigener Menüpunkt mehr); in der Record-Liste öffnet das
-  Stift-Symbol dasselbe Formular im Bearbeitungsmodus.
+  Stift-Symbol dasselbe Formular im Bearbeitungsmodus. Die Record-Liste lässt sich durch Klick auf eine
+  Spaltenüberschrift sortieren (Provider, Host, Typ, TTL, Aktuelle IP, Status, Letzter Abgleich, Aktiv -
+  erneuter Klick kehrt die Reihenfolge um) und über das Suchfeld sowie die Dropdowns darüber filtern
+  (Hostname, Provider, Typ, Status, aktiv/inaktiv); Filter bleiben auch über die automatische
+  Aktualisierung hinweg erhalten, die Sortierung wird nicht automatisch verändert.
 - **Record hinzufügen/bearbeiten** (`/records/new` bzw. `/records/<id>/edit`, ein gemeinsames Formular):
   zuerst den DNS-Provider wählen (Domain Chief oder Cloudflare - jeder Record wählt seinen eigenen,
   beide können gleichzeitig genutzt werden), dann Domain, Subdomain (leer = Root-Domain, z.B. nur
@@ -112,6 +116,21 @@ optional und unabhängig voneinander, siehe "Voraussetzungen" oben.)
   Proxy-Status lassen sich ändern. Wird dabei Provider oder Typ geändert, legt der nächste Abgleich
   automatisch einen neuen DNS-Record beim (neuen) Provider an und entfernt den alten dort, wo er vorher
   war; reine TTL-/Kommentar-/Proxy-Änderungen werden ebenfalls erst beim nächsten Abgleich übernommen.
+- **Vorhandene Records importieren** (`/records/import`, verlinkt in den Abschnitten "Domain Chief"/
+  "Cloudflare" in den Einstellungen): durchsucht alle Domains beim konfigurierten Provider (bzw. beiden)
+  nach A-/AAAA-Records, die schon jetzt auf die aktuell ermittelte öffentliche IPv4/IPv6 zeigen, aber
+  hier noch nicht verwaltet werden - nützlich, wenn Records direkt beim Provider (oder von einem
+  älteren Setup) angelegt wurden statt über diese App. Passende Records werden mit Host, TTL, aktueller
+  IP und Kommentar zur Auswahl angezeigt; die ausgewählten werden direkt als bereits aktuell markiert in
+  die lokale Verwaltung übernommen (beim Provider ändert sich dabei nichts - der Record zeigte ja schon
+  auf die richtige IP), zeigen also sofort den Status "unverändert" statt erst auf den nächsten Abgleich
+  zu warten. Bereits verwaltete Records sowie Records, deren Inhalt gerade nicht der eigenen öffentlichen
+  IP entspricht, werden nicht angeboten.
+- **An/Aus**: Der Button in der Spalte "Aktiv" deaktiviert/aktiviert einen Record. Wird ein Record
+  ausgeschaltet, wird sein DNS-Record beim Provider gelöscht (die Subdomain löst also nicht mehr auf,
+  statt unbemerkt mit der zuletzt eingetragenen IP bestehen zu bleiben) - der Eintrag samt Konfiguration
+  bleibt aber in dieser Liste erhalten. Wird er wieder eingeschaltet, legt der nächste Abgleich (sofort
+  angestoßen, ohne auf das Intervall zu warten) den DNS-Record beim Provider neu an.
 - **Löschen**: Der Papierkorb-Button in der Record-Liste löscht den Record sowohl aus der lokalen
   Konfiguration als auch direkt bei seinem Provider über die API.
 - **Einstellungen** (`/settings`): API-Tokens für beide Provider, Team-ID (Domain Chief), Prüfintervall,

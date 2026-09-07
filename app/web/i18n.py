@@ -26,6 +26,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav.logs": "Logs",
         "nav.logout": "Abmelden",
         "footer.tagline": "Dynamic DNS für",
+        "footer.and": "und",
         "footer.version": "Version",
         "theme.light": "Hell",
         "theme.dark": "Dunkel",
@@ -60,11 +61,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dashboard.btn_edit": "Bearbeiten",
         "dashboard.btn_delete": "Löschen",
         "dashboard.confirm_delete": "Record wirklich beim DNS-Provider löschen?",
+        "dashboard.confirm_disable": "Record wirklich deaktivieren? Der DNS-Record wird dabei beim Provider gelöscht (bleibt aber in dieser Liste erhalten und kann jederzeit wieder aktiviert werden).",
+        "dashboard.filter_search": "Host suchen…",
+        "dashboard.filter_all": "Alle",
+        "dashboard.filter_reset": "Filter zurücksetzen",
+        "dashboard.no_matches": "Keine Records entsprechen den aktuellen Filtern.",
         "status.unchanged": "unverändert",
         "status.created": "erstellt",
         "status.updated": "aktualisiert",
         "status.error": "fehler",
         "status.pending": "ausstehend",
+        "status.disabled": "deaktiviert",
         # Record hinzufügen
         "new_record.title": "Record hinzufügen",
         "new_record.domains_error": "Domains konnten nicht geladen werden:",
@@ -93,6 +100,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "nächsten Abgleich automatisch übernommen und auf die aktuelle öffentliche IP "
             "aktualisiert."
         ),
+        # Vorhandene Records importieren
+        "import.title": "Vorhandene Records importieren",
+        "import.intro": (
+            "Durchsucht alle Domains bei den konfigurierten Providern nach A-/AAAA-Records, "
+            "die schon jetzt auf die ermittelte öffentliche IP zeigen, aber hier noch nicht "
+            "verwaltet werden - zum Übernehmen einfach auswählen und importieren."
+        ),
+        "import.no_provider": "Es ist noch kein DNS-Provider konfiguriert.",
+        "import.no_provider_cta": "Jetzt in den Einstellungen einrichten",
+        "import.no_public_ip": (
+            "Öffentliche IPv4/IPv6 konnte nicht ermittelt werden - es können daher keine "
+            "passenden Records gefunden werden."
+        ),
+        "import.no_candidates": (
+            "Keine importierbaren Records gefunden. Entweder werden bereits alle passenden "
+            "Records hier verwaltet, oder es zeigt (noch) kein vorhandener Record beim Provider "
+            "auf Ihre aktuelle öffentliche IP."
+        ),
+        "import.select_all": "Alle auswählen",
+        "import.btn_import": "Ausgewählte importieren",
         # Record bearbeiten
         "edit_record.title": "Record bearbeiten",
         "edit_record.btn_save": "Speichern",
@@ -139,6 +166,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.datetime_format_hint": "Bestimmt, wie Zeitstempel im Dashboard und in den Logs angezeigt werden.",
         "settings.btn_save": "Speichern",
         "settings.btn_test": "Verbindung testen",
+        "settings.btn_import": "Vorhandene Records importieren",
         "settings.testing": "Teste...",
         "settings.test_no_token": "Kein API-Token gesetzt.",
         "settings.test_success": "Verbindung erfolgreich.",
@@ -274,6 +302,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "nav.logs": "Logs",
         "nav.logout": "Log out",
         "footer.tagline": "Dynamic DNS for",
+        "footer.and": "and",
         "footer.version": "Version",
         "theme.light": "Light",
         "theme.dark": "Dark",
@@ -308,11 +337,17 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "dashboard.btn_edit": "Edit",
         "dashboard.btn_delete": "Delete",
         "dashboard.confirm_delete": "Really delete this record at its DNS provider?",
+        "dashboard.confirm_disable": "Really disable this record? Its DNS record will be deleted at the provider (it stays in this list and can be re-enabled at any time).",
+        "dashboard.filter_search": "Search host…",
+        "dashboard.filter_all": "All",
+        "dashboard.filter_reset": "Reset filters",
+        "dashboard.no_matches": "No records match the current filters.",
         "status.unchanged": "unchanged",
         "status.created": "created",
         "status.updated": "updated",
         "status.error": "error",
         "status.pending": "pending",
+        "status.disabled": "disabled",
         # Add record
         "new_record.title": "Add record",
         "new_record.domains_error": "Could not load domains:",
@@ -340,6 +375,26 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
             "the selected account. If the record already exists, it will be picked up "
             "automatically on the next sync and updated to the current public IP."
         ),
+        # Import existing records
+        "import.title": "Import existing records",
+        "import.intro": (
+            "Scans every domain at the configured providers for A/AAAA records that already "
+            "point at the detected public IP but aren't managed here yet - select the ones "
+            "you want and import them."
+        ),
+        "import.no_provider": "No DNS provider configured yet.",
+        "import.no_provider_cta": "Set one up in Settings now",
+        "import.no_public_ip": (
+            "Could not determine the public IPv4/IPv6 address - no matching records can be "
+            "found without it."
+        ),
+        "import.no_candidates": (
+            "No importable records found. Either every matching record is already managed "
+            "here, or no existing record at the provider points at your current public IP "
+            "(yet)."
+        ),
+        "import.select_all": "Select all",
+        "import.btn_import": "Import selected",
         # Edit record
         "edit_record.title": "Edit record",
         "edit_record.btn_save": "Save",
@@ -385,6 +440,7 @@ TRANSLATIONS: dict[str, dict[str, str]] = {
         "settings.datetime_format_hint": "Controls how timestamps are displayed on the dashboard and in the logs.",
         "settings.btn_save": "Save",
         "settings.btn_test": "Test connection",
+        "settings.btn_import": "Import existing records",
         "settings.testing": "Testing...",
         "settings.test_no_token": "No API token set.",
         "settings.test_success": "Connection successful.",

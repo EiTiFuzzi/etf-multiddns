@@ -212,7 +212,10 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
         # For the JS that periodically refreshes the dashboard content from
         # /api/status (see index.html) - this way status labels also follow the
         # UI language, without /api/status itself having to return translated text.
-        status_labels = {key: g.t("status." + key) for key in ("unchanged", "created", "updated", "error", "pending")}
+        status_labels = {
+            key: g.t("status." + key)
+            for key in ("unchanged", "created", "updated", "error", "pending", "disabled")
+        }
         return render_template(
             "index.html",
             records=records,
@@ -555,11 +558,69 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
 
     @app.post("/records/<record_id>/toggle")
     def toggle_record(record_id: str):
-        cfg = service.config
-        record = config_module.get_record(cfg, record_id)
+        record = config_module.get_record(service.config, record_id)
         if record:
-            record["enabled"] = not record.get("enabled", True)
-            config_module.save_config(cfg)
+            try:
+                service.set_record_enabled(record_id, not record.get("enabled", True))
+            except (KeyError, *ProviderError) as exc:
+                # Mirrors delete_record: logged only - if disabling failed
+                # remotely, set_record_enabled left the record enabled and
+                # unchanged, so there's nothing to reflect in the UI beyond
+                # the record simply not having toggled off.
+                logger.error("Could not toggle record %s: %s", record_id, exc)
+        return redirect(url_for("index"))
+
+    @app.get("/records/import")
+    def import_records_form():
+        candidates, scan_errors, ipv4, ipv6 = service.find_importable_records()
+        cfg = service.config
+        providers_available = [
+            p
+            for p in ("domainchief", "cloudflare")
+            if cfg.get("api_token" if p == "domainchief" else "cloudflare_api_token")
+        ]
+        return render_template(
+            "record_import.html",
+            candidates=candidates,
+            scan_errors=scan_errors,
+            ipv4=ipv4,
+            ipv6=ipv6,
+            providers_available=providers_available,
+        )
+
+    @app.post("/records/import")
+    def import_records():
+        # Each candidate's data travels back as plain per-index hidden fields
+        # (cand_<field>_<i>) rather than one JSON blob, see record_import.html
+        # for why (tojson isn't safe to embed directly in an HTML attribute).
+        selected = []
+        for raw_index in request.form.getlist("import"):
+            try:
+                index = int(raw_index)
+            except ValueError:
+                continue
+            domain = request.form.get(f"cand_domain_{index}")
+            if domain is None:
+                continue  # no matching hidden fields for this index - ignore
+            try:
+                ttl = int(request.form.get(f"cand_ttl_{index}", "300"))
+            except ValueError:
+                ttl = 300
+            selected.append(
+                {
+                    "provider": request.form.get(f"cand_provider_{index}", ""),
+                    "domain": domain,
+                    "name": request.form.get(f"cand_name_{index}", ""),
+                    "type": request.form.get(f"cand_type_{index}", ""),
+                    "ttl": ttl,
+                    "comment": request.form.get(f"cand_comment_{index}", ""),
+                    "proxied": request.form.get(f"cand_proxied_{index}") == "1",
+                    "content": request.form.get(f"cand_content_{index}", ""),
+                    "dns_record_id": request.form.get(f"cand_dns_record_id_{index}", ""),
+                }
+            )
+
+        service.import_records(selected)
         return redirect(url_for("index"))
 
     @app.get("/logs")
@@ -577,7 +638,15 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
         # the SAME objects a later save_config() call persists to disk, so writing a
         # display-formatted string into them would corrupt the stored canonical value.
         records = [
-            {**record, "last_sync_at": config_module.format_timestamp(record.get("last_sync_at"))}
+            {
+                **record,
+                "last_sync_at": config_module.format_timestamp(record.get("last_sync_at")),
+                # Canonical ISO value, additive alongside the display-formatted
+                # "last_sync_at" above - the dashboard's sort feature needs a
+                # value that actually sorts chronologically across timezones/
+                # display formats, which the formatted string does not.
+                "last_sync_at_raw": record.get("last_sync_at") or "",
+            }
             for record in service.config.get("records", [])
         ]
         return jsonify(

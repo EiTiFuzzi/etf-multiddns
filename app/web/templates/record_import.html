@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}{{ t('import.title') }} - {{ t('brand') }}{% endblock %}
+{% block content %}
+  <h1>{{ t('import.title') }}</h1>
+
+  {% if not providers_available %}
+    <p class="empty">
+      {{ t('import.no_provider') }}
+      <a href="{{ url_for('settings') }}">{{ t('import.no_provider_cta') }}</a>.
+    </p>
+  {% else %}
+    <p class="hint">
+      {{ t('import.intro') }}
+      {% if ipv4 %}<br>{{ t('dashboard.card_ipv4') }}: <strong>{{ ipv4 }}</strong>{% endif %}
+      {% if ipv6 %}<br>{{ t('dashboard.card_ipv6') }}: <strong>{{ ipv6 }}</strong>{% endif %}
+    </p>
+
+    {% if not ipv4 and not ipv6 %}
+      <div class="alert alert-warning">{{ t('import.no_public_ip') }}</div>
+    {% endif %}
+
+    {% for msg in scan_errors %}
+      <div class="alert alert-error">{{ msg }}</div>
+    {% endfor %}
+
+    {% if not candidates %}
+      <p class="empty">{{ t('import.no_candidates') }}</p>
+    {% else %}
+      <form method="post" action="{{ url_for('import_records') }}">
+        <div class="table-scroll">
+        <table class="records">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="import-select-all" aria-label="{{ t('import.select_all') }}"></th>
+              <th>{{ t('dashboard.th_provider') }}</th>
+              <th>{{ t('dashboard.th_host') }}</th>
+              <th>{{ t('dashboard.th_type') }}</th>
+              <th>{{ t('dashboard.th_ttl') }}</th>
+              <th>{{ t('dashboard.th_current_ip') }}</th>
+              <th>{{ t('new_record.label_comment') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for c in candidates %}
+            {% set is_cloudflare = c.provider == 'cloudflare' %}
+            {% set provider_name = 'Cloudflare' if is_cloudflare else 'Domain Chief' %}
+            {% set provider_icon = 'provider-cloudflare.svg' if is_cloudflare else 'etf-multiddns-logo.svg' %}
+            {% set i = loop.index0 %}
+            <tr>
+              <td>
+                <input type="checkbox" name="import" value="{{ i }}" class="import-checkbox" checked>
+                {#- The rest of the candidate (everything import_records() needs to
+                    add it to local management) travels back to the server as plain
+                    hidden fields, one per candidate index - NOT as one big
+                    tojson-serialized blob in a single attribute: tojson only
+                    escapes for safe embedding in a <script> context, not inside an
+                    HTML attribute, and this data can contain double quotes (e.g. a
+                    comment copied from the provider) that would otherwise
+                    prematurely terminate the attribute value where a literal "
+                    appears - exactly the kind of subtle bug that only shows up
+                    with real-world data, not simple test fixtures. #}
+                <input type="hidden" name="cand_provider_{{ i }}" value="{{ c.provider }}">
+                <input type="hidden" name="cand_domain_{{ i }}" value="{{ c.domain }}">
+                <input type="hidden" name="cand_name_{{ i }}" value="{{ c.name }}">
+                <input type="hidden" name="cand_type_{{ i }}" value="{{ c.type }}">
+                <input type="hidden" name="cand_ttl_{{ i }}" value="{{ c.ttl }}">
+                <input type="hidden" name="cand_comment_{{ i }}" value="{{ c.comment }}">
+                <input type="hidden" name="cand_proxied_{{ i }}" value="{{ '1' if c.proxied else '0' }}">
+                <input type="hidden" name="cand_content_{{ i }}" value="{{ c.content }}">
+                <input type="hidden" name="cand_dns_record_id_{{ i }}" value="{{ c.dns_record_id }}">
+              </td>
+              <td>
+                <img src="{{ url_for('static', filename=provider_icon) }}" alt="{{ provider_name }}" title="{{ provider_name }}" class="provider-icon">
+              </td>
+              <td>{{ (c.name + "." + c.domain) if c.name else c.domain }}</td>
+              <td>{{ c.type }}{{ (' (' + t('new_record.label_proxied') + ')') if is_cloudflare and c.proxied else '' }}</td>
+              <td>{{ c.ttl }}</td>
+              <td>{{ c.content }}</td>
+              <td>{{ c.comment or "-" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary">{{ t('import.btn_import') }}</button>
+          <a href="{{ url_for('index') }}" class="btn">{{ t('new_record.btn_cancel') }}</a>
+        </div>
+      </form>
+
+      <script>
+        (function () {
+          var selectAll = document.getElementById('import-select-all');
+          var checkboxes = Array.prototype.slice.call(document.querySelectorAll('.import-checkbox'));
+          if (!selectAll) return;
+
+          function syncSelectAll() {
+            selectAll.checked = checkboxes.length > 0 && checkboxes.every(function (cb) { return cb.checked; });
+          }
+
+          selectAll.addEventListener('change', function () {
+            checkboxes.forEach(function (cb) { cb.checked = selectAll.checked; });
+          });
+          checkboxes.forEach(function (cb) { cb.addEventListener('change', syncSelectAll); });
+          syncSelectAll();
+        })();
+      </script>
+    {% endif %}
+  {% endif %}
+{% endblock %}

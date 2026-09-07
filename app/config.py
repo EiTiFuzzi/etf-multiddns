@@ -308,6 +308,49 @@ def add_record(
     return record
 
 
+def import_record(
+    config: dict,
+    *,
+    domain: str,
+    name: str,
+    record_type: str,
+    ttl: int,
+    comment: str,
+    provider: str,
+    proxied: bool,
+    dns_record_id: str,
+    current_ip: str,
+) -> dict:
+    """Adds a record that already exists at the provider - and already points
+    at the current public IP - to local management (see the "Import existing
+    records" feature: DDNSService.find_importable_records()/import_records()).
+
+    Unlike add_record(), this is marked as already synced (dns_record_id,
+    last_ip and last_status="unchanged" set directly) instead of "pending":
+    the record isn't being newly created, it already exists and already
+    matches, so the next regular sync only needs to confirm nothing changed
+    since the scan, not create anything."""
+    record = {
+        "id": uuid.uuid4().hex[:12],
+        "domain": domain.strip().lower(),
+        "name": (name or "").strip().lower(),
+        "type": record_type.upper(),
+        "ttl": int(ttl),
+        "enabled": True,
+        "comment": comment or "Managed by etf-multiddns",
+        "provider": provider if provider in PROVIDERS else DEFAULT_PROVIDER,
+        "proxied": bool(proxied),
+        "last_ip": current_ip,
+        "last_sync_at": utc_now_iso(),
+        "last_status": "unchanged",
+        "last_error": None,
+        "dns_record_id": dns_record_id,
+    }
+    config["records"].append(record)
+    save_config(config)
+    return record
+
+
 def remove_record(config: dict, record_id: str) -> bool:
     before = len(config["records"])
     config["records"] = [r for r in config["records"] if r["id"] != record_id]

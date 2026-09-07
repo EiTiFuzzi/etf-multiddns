@@ -392,3 +392,175 @@ class DDNSService:
         # needs_ipv4/needs_ipv6 (depends on the remaining records) and the
         # dashboard status update without waiting for the check interval.
         self.trigger_now()
+
+    # ------------------------------------------------------------------
+    def set_record_enabled(self, record_id: str, enabled: bool) -> dict:
+        """Called from the Web UI (On/Off button in the record list).
+
+        Turning a record OFF doesn't just pause it locally - it also removes
+        the DNS record at its provider (like delete_record_remote_and_local,
+        but the entry itself stays in the local list/config instead of being
+        removed). This avoids a stale/orphaned DNS record silently sticking
+        around at the provider, still pointing at whatever IP address it was
+        last updated to, for as long as the record stays disabled here - which
+        could be a stale IP later reassigned to someone else once the
+        connection this dynamic DNS depends on changes.
+
+        If the remote deletion fails (network issue, revoked token, ...), the
+        exception is re-raised and NO local state is changed at all (mirrors
+        delete_record_remote_and_local) - the record stays enabled and
+        actively managed rather than ending up disabled locally while still
+        live (and un-managed) at the provider.
+
+        Turning a record back ON only flips the local flag; the next sync
+        (triggered immediately, not waiting for the check interval) then
+        creates a fresh DNS record for it, exactly like a brand new record."""
+        record = config_module.get_record(self.config, record_id)
+        if not record:
+            raise KeyError(f"Unknown record: {record_id}")
+
+        if enabled:
+            record["enabled"] = True
+            self._save()
+            self.trigger_now()
+            return record
+
+        provider = record.get("provider", "domainchief")
+        if record.get("dns_record_id"):
+            try:
+                client = self._client(provider)
+                client.delete_dns_record(record["domain"], record["dns_record_id"])
+                logger.info("%s: record deleted at %s (disabled via dashboard)", self._record_label(record), provider)
+            except ProviderError as exc:
+                logger.error("Could not delete record at %s while disabling: %s", provider, exc)
+                raise
+
+        record["enabled"] = False
+        record["dns_record_id"] = None
+        record["last_ip"] = None
+        record["last_status"] = "disabled"
+        record["last_error"] = None
+        record["last_sync_at"] = _status_timestamp()
+        self._save()
+        return record
+
+    # ------------------------------------------------------------------
+    def find_importable_records(self) -> tuple[list[dict], list[str], Optional[str], Optional[str]]:
+        """Called from the Web UI ("Import existing records", linked from the
+        provider sections in Settings). Scans every domain at every
+        CONFIGURED provider for A/AAAA records that already point at the
+        current public IPv4/IPv6 but aren't locally managed yet - so records
+        that were created directly at the provider (or by an older setup
+        this app never knew about) can be adopted without retyping every
+        domain/subdomain by hand.
+
+        Read-only: only lists data at the provider(s), never creates/changes/
+        deletes anything there or in the local config - see import_records()
+        for the write side. A provider without a configured token is skipped
+        silently (nothing to scan); a provider/domain that fails while
+        already configured is recorded in the returned scan_errors list, but
+        does not stop the scan of the others.
+
+        Returns (candidates, scan_errors, ipv4, ipv6). Each candidate is a
+        plain dict (domain/name/type/content/ttl/comment/proxied/provider/
+        dns_record_id) - the same shape import_records() expects."""
+        self.reload_config()
+        ipv4 = get_public_ipv4(self.config.get("ipv4_providers") or None)
+        ipv6 = get_public_ipv6(self.config.get("ipv6_providers") or None)
+
+        candidates: list[dict] = []
+        scan_errors: list[str] = []
+
+        # (provider, domain, name, type) of every record already managed
+        # locally - a candidate matching one of these is already known and
+        # must not be offered again.
+        existing_keys = {
+            (
+                r.get("provider", "domainchief"),
+                r["domain"].strip().lower(),
+                (r.get("name") or "").strip().lower(),
+                r["type"],
+            )
+            for r in self.config["records"]
+        }
+
+        for provider in ("domainchief", "cloudflare"):
+            try:
+                client = self._client(provider)
+            except ProviderError:
+                continue  # not configured - nothing to scan for this provider
+
+            try:
+                domains = [d.get("domain") for d in client.list_domains() if d.get("domain")]
+            except ProviderError as exc:
+                scan_errors.append(f"{provider}: {exc}")
+                continue
+
+            for domain in domains:
+                try:
+                    records = client.list_dns_records(domain)
+                except ProviderError as exc:
+                    scan_errors.append(f"{provider}/{domain}: {exc}")
+                    continue
+
+                for rec in records:
+                    if rec.type not in ("A", "AAAA"):
+                        continue
+                    target_ip = ipv4 if rec.type == "A" else ipv6
+                    if not target_ip or rec.content != target_ip:
+                        continue
+                    name = (rec.name or "").strip().lower()
+                    key = (provider, domain.strip().lower(), name, rec.type)
+                    if key in existing_keys:
+                        continue
+                    candidates.append(
+                        {
+                            "provider": provider,
+                            "domain": domain,
+                            "name": rec.name or "",
+                            "type": rec.type,
+                            "content": rec.content,
+                            "ttl": rec.ttl,
+                            "comment": rec.comment or "",
+                            "proxied": bool(getattr(rec, "proxied", False)),
+                            "dns_record_id": rec.id,
+                        }
+                    )
+
+        return candidates, scan_errors, ipv4, ipv6
+
+    def import_records(self, selected: list[dict]) -> int:
+        """Adds each of the given candidate records (as returned by
+        find_importable_records(), selected by the user in the Web UI) to
+        local management, already marked as synced/adopted - see
+        config.import_record(). Nothing is created or changed at the
+        provider here: the whole point is that these records already exist
+        there and already match, so the next regular sync only needs to
+        confirm that (or pick up anything that changed since the scan).
+        Returns how many records were actually imported (entries with an
+        unknown/missing provider are skipped)."""
+        count = 0
+        for item in selected or []:
+            provider = item.get("provider")
+            if provider not in ("domainchief", "cloudflare"):
+                continue
+            domain = item.get("domain") or ""
+            record_type = item.get("type") or ""
+            if not domain or record_type not in ("A", "AAAA"):
+                continue
+            config_module.import_record(
+                self.config,
+                domain=domain,
+                name=item.get("name", ""),
+                record_type=record_type,
+                ttl=item.get("ttl", 300),
+                comment=item.get("comment", ""),
+                provider=provider,
+                proxied=item.get("proxied", False),
+                dns_record_id=item.get("dns_record_id"),
+                current_ip=item.get("content", ""),
+            )
+            count += 1
+        if count:
+            self.trigger_now()
+        return count

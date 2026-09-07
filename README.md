@@ -96,7 +96,11 @@ whichever of the two `*_API_TOKEN` variables you don't need - both are optional 
   the status of each managed record (unchanged / created / updated / error), together with the provider
   it's synced to. A button lets you trigger an immediate sync without waiting for the interval. The
   "Add record" button leads to the create/edit form (no longer a separate menu item); in the record
-  list, the pencil icon opens the same form in edit mode.
+  list, the pencil icon opens the same form in edit mode. The record list can be sorted by clicking any
+  column header (Provider, Host, Type, TTL, Current IP, Status, Last sync, Active - click again to
+  reverse the order) and filtered with the search box and dropdowns above it (host name, provider, type,
+  status, active/inactive); filters stay in effect across the automatic refresh, sorting is left as you
+  set it.
 - **Add/edit record** (`/records/new` or `/records/<id>/edit`, a shared form): choose the DNS provider
   (Domain Chief or Cloudflare - each record picks its own, both can be used at the same time), then
   enter domain, subdomain (empty = root domain, e.g. just `example.com`), type (A/AAAA), TTL, comment,
@@ -107,6 +111,19 @@ whichever of the two `*_API_TOKEN` variables you don't need - both are optional 
   is changed, the next sync automatically creates a new DNS record at the (new) provider and removes the
   old one at the provider it used to be at; plain TTL/comment/proxied changes are likewise only applied
   on the next sync.
+- **Import existing records** (`/records/import`, linked from the "Domain Chief"/"Cloudflare" sections
+  in Settings): scans every domain at the configured provider(s) for A/AAAA records that already point at
+  the currently detected public IPv4/IPv6 but aren't managed here yet - useful when records were created
+  directly at the provider (or by an older setup) rather than through this app. Matching records are
+  listed with their host, TTL, current IP and comment for review; the ones you select are added to local
+  management already marked as up to date (no DNS change happens at the provider - it already had the
+  right content), so they immediately show status "unchanged" instead of waiting for the next sync.
+  Records already managed here, or whose content doesn't currently match your public IP, aren't offered.
+- **On/Off**: the button in the "Active" column disables/enables a record. Turning a record off
+  deletes its DNS record at the provider (so the hostname stops resolving instead of quietly sticking
+  around, unmanaged, at whatever IP it was last updated to), but keeps the entry - and its configuration
+  - in this list. Turning it back on recreates the DNS record at the provider on the next sync (triggered
+  immediately, not waiting for the check interval).
 - **Delete**: the trash-can button in the record list deletes the record both from the local
   configuration and directly at its provider via the API.
 - **Settings** (`/settings`): API tokens for both providers, team ID (Domain Chief), check interval,

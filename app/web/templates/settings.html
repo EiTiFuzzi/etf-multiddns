@@ -27,6 +27,7 @@
 
     <div class="form-actions">
       <button type="button" class="btn" onclick="testConnection()">{{ t('settings.btn_test') }}</button>
+      <a href="{{ url_for('import_records_form') }}" class="btn">{{ t('settings.btn_import') }}</a>
     </div>
     <p id="test-result"></p>
 
@@ -49,6 +50,7 @@
 
     <div class="form-actions">
       <button type="button" class="btn" onclick="testCloudflareConnection()">{{ t('settings.btn_test') }}</button>
+      <a href="{{ url_for('import_records_form') }}" class="btn">{{ t('settings.btn_import') }}</a>
     </div>
     <p id="cloudflare-test-result"></p>
 
