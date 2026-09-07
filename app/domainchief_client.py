@@ -279,7 +279,25 @@ class DomainChiefClient:
         return DNSRecord.from_api(data["data"])
 
     def delete_dns_record(self, domain: str, record_id: str) -> None:
-        self._request("DELETE", f"/domains/{domain}/dns/records/{record_id}")
+        # A 404 here means the desired end state (no such record at the
+        # provider) is already true - e.g. it was already removed manually,
+        # or a previous attempt actually succeeded server-side even though
+        # the response never made it back here (timeout/network hiccup).
+        # Treating that as success (instead of raising) is what makes this
+        # idempotent - otherwise disabling/deleting a record whose remote
+        # copy is already gone would fail forever, with the Web UI's On/Off
+        # switch or Delete button appearing to silently do nothing every
+        # single time it's tried.
+        try:
+            self._request("DELETE", f"/domains/{domain}/dns/records/{record_id}")
+        except DomainChiefError as exc:
+            if exc.status_code == 404:
+                logger.info(
+                    "DELETE %s/dns/records/%s returned 404 - already gone, treating as deleted",
+                    domain, record_id,
+                )
+                return
+            raise
 
     # ------------------------------------------------------------------
     # Domains (only for the Web UI, to display existing domains)

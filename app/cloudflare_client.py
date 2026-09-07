@@ -312,7 +312,25 @@ class CloudflareClient:
 
     def delete_dns_record(self, domain: str, record_id: str) -> None:
         zone_id = self.find_zone_id(domain)
-        self._request("DELETE", f"/zones/{zone_id}/dns_records/{record_id}")
+        # A 404 here means the desired end state (no such record at the
+        # provider) is already true - e.g. it was already removed manually,
+        # or a previous attempt actually succeeded server-side even though
+        # the response never made it back here (timeout/network hiccup).
+        # Treating that as success (instead of raising) is what makes this
+        # idempotent - otherwise disabling/deleting a record whose remote
+        # copy is already gone would fail forever, with the Web UI's On/Off
+        # switch or Delete button appearing to silently do nothing every
+        # single time it's tried.
+        try:
+            self._request("DELETE", f"/zones/{zone_id}/dns_records/{record_id}")
+        except CloudflareError as exc:
+            if exc.status_code == 404:
+                logger.info(
+                    "DELETE /zones/%s/dns_records/%s returned 404 - already gone, treating as deleted",
+                    zone_id, record_id,
+                )
+                return
+            raise
 
     # ------------------------------------------------------------------
     # Zones (only for the Web UI, to display available domains)
