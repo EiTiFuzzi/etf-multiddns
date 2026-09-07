@@ -6,10 +6,6 @@ services:
     # For local development, replace the line above with the next one instead
     # (builds from the local source code instead of pulling the image):
     # build: .
-    # Forces a fresh pull on every deploy, instead of using a local image that
-    # may not exist or may be outdated (relevant for Portainer, which
-    # otherwise doesn't automatically re-pull on a stack update).
-    pull_policy: always
     container_name: etf-multiddns
     restart: unless-stopped
     ports:
