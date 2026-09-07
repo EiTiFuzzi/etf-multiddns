@@ -113,8 +113,73 @@ class DDNSService:
         return DomainChiefClient(api_token=token, team_id=self.config.get("team_id") or None)
 
     def reload_config(self) -> None:
+        """Reloads the on-disk config and merges it into the EXISTING
+        self.config object IN PLACE, instead of replacing self.config with a
+        brand new dict/record-object tree (which is what this used to do).
+
+        This matters a lot in practice: reload_config() is called at the
+        start of nearly every Web UI route (so each request works with fresh
+        data) as well as at the start of every background sync run - while
+        OTHER code (a toggle/delete/edit request that's mid-flight, or an
+        in-progress sync run iterating over its own records) may already be
+        holding a reference to self.config, or to one of its record dicts,
+        obtained BEFORE this reload - and only writes its own change back
+        (via self._save()/config_module.save_config()) AFTER a slow step
+        finishes, such as a network call to the DNS provider, or the rest of
+        a sync run over several records. If reload_config() replaced
+        self.config with a completely new object tree (the old behavior),
+        any such in-flight caller would keep mutating a now-orphaned copy
+        that's no longer reachable from self.config at all - and when it
+        later calls self._save(), that would silently persist whatever
+        self.config CURRENTLY is (the fresh, unrelated reload) instead,
+        discarding the in-flight change entirely without ever raising an
+        error. Given the Web UI dashboard alone polls /api/status (which
+        used to call reload_config() too) every 4 seconds, and gunicorn
+        serves this app with multiple threads (see the Dockerfile), that
+        race was not a rare edge case - it's exactly what caused the On/Off
+        switch and the Delete button to work "sometimes", the status column
+        to occasionally show stale data, and - worst of all - a freshly
+        synced record's provider-side id to sometimes never make it into the
+        saved config at all (leaving a record that a later Delete can no
+        longer clean up remotely, since its locally-known id was lost).
+
+        Updating in place instead means self.config, and every record dict
+        reachable through self.config["records"] (matched across reloads by
+        "id"), keep their object identity for the life of the process - any
+        reference obtained before a reload stays live and reflects the
+        latest state across it, instead of silently going stale."""
+        fresh = config_module.load_config()
         with self._state_lock:
-            self.config = config_module.load_config()
+            self._merge_config_in_place(fresh)
+
+    def _merge_config_in_place(self, fresh: dict) -> None:
+        """Updates self.config with the freshly loaded values from disk,
+        preserving the identity of self.config itself and of every existing
+        record dict (matched by "id") wherever one still exists in the fresh
+        data - see reload_config() for why this matters. A record dict that
+        moved (identity-wise) is impossible here on purpose: existing record
+        objects are updated field-by-field (clear + update) rather than
+        swapped out, and only a record that's genuinely new (not seen
+        before) or genuinely gone (no longer present in the fresh data) ever
+        changes which objects are in the list."""
+        existing_by_id = {r["id"]: r for r in self.config.get("records", []) if "id" in r}
+        merged_records = []
+        for fresh_record in fresh.get("records", []):
+            current = existing_by_id.get(fresh_record.get("id"))
+            if current is not None:
+                current.clear()
+                current.update(fresh_record)
+                merged_records.append(current)
+            else:
+                merged_records.append(fresh_record)
+
+        for key, value in fresh.items():
+            if key != "records":
+                self.config[key] = value
+        for key in list(self.config.keys()):
+            if key != "records" and key not in fresh:
+                del self.config[key]
+        self.config["records"] = merged_records
 
     def _save(self) -> None:
         config_module.save_config(self.config)

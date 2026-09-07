@@ -310,27 +310,44 @@ class CloudflareClient:
         data = self._request("PUT", f"/zones/{zone_id}/dns_records/{record_id}", json_body=body)
         return DNSRecord.from_api(data["result"], domain)
 
+    # Cloudflare error code 81044 = "Record does not exist." - returned when
+    # deleting a DNS record ID that's already gone. Unlike a REST-ish 404,
+    # Cloudflare's API returns this as a 400 Bad Request with the code buried
+    # in the JSON error body, so status_code alone doesn't catch it (see
+    # below).
+    _RECORD_NOT_FOUND_CODE = 81044
+
     def delete_dns_record(self, domain: str, record_id: str) -> None:
         zone_id = self.find_zone_id(domain)
-        # A 404 here means the desired end state (no such record at the
-        # provider) is already true - e.g. it was already removed manually,
-        # or a previous attempt actually succeeded server-side even though
-        # the response never made it back here (timeout/network hiccup).
-        # Treating that as success (instead of raising) is what makes this
-        # idempotent - otherwise disabling/deleting a record whose remote
-        # copy is already gone would fail forever, with the Web UI's On/Off
-        # switch or Delete button appearing to silently do nothing every
-        # single time it's tried.
+        # Either signal here means the desired end state (no such record at
+        # the provider) is already true - e.g. it was already removed
+        # manually, or a previous attempt actually succeeded server-side even
+        # though the response never made it back here (timeout/network
+        # hiccup). Treating that as success (instead of raising) is what
+        # makes this idempotent - otherwise disabling/deleting a record whose
+        # remote copy is already gone would fail forever, with the Web UI's
+        # On/Off switch or Delete button appearing to silently do nothing
+        # every single time it's tried.
         try:
             self._request("DELETE", f"/zones/{zone_id}/dns_records/{record_id}")
         except CloudflareError as exc:
-            if exc.status_code == 404:
+            already_gone = exc.status_code == 404 or self._is_record_not_found(exc.payload)
+            if already_gone:
                 logger.info(
-                    "DELETE /zones/%s/dns_records/%s returned 404 - already gone, treating as deleted",
-                    zone_id, record_id,
+                    "DELETE /zones/%s/dns_records/%s - record already gone (%s), treating as deleted",
+                    zone_id, record_id, exc,
                 )
                 return
             raise
+
+    @classmethod
+    def _is_record_not_found(cls, payload: Any) -> bool:
+        if not isinstance(payload, dict):
+            return False
+        for err in payload.get("errors") or []:
+            if isinstance(err, dict) and err.get("code") == cls._RECORD_NOT_FOUND_CODE:
+                return True
+        return False
 
     # ------------------------------------------------------------------
     # Zones (only for the Web UI, to display available domains)
