@@ -184,6 +184,19 @@ class DDNSService:
     def _save(self) -> None:
         config_module.save_config(self.config)
 
+    def _save_locked(self) -> None:
+        """Same as _save(), but holds _state_lock while doing so - the same
+        lock reload_config() holds while merging fresh on-disk data into the
+        live record objects (see its docstring). Without this, a save could
+        land in between "reload_config() read the (still stale, not-yet-
+        saved) file" and "reload_config() applied it to the live objects" -
+        overwriting a change this save is trying to persist right back with
+        stale data moments later. Used wherever a record's fields are set and
+        then immediately persisted (the sync loop, per record; the On/Off
+        toggle), so the save is never straddled by a concurrent reload."""
+        with self._state_lock:
+            config_module.save_config(self.config)
+
     # ------------------------------------------------------------------
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -258,6 +271,30 @@ class DDNSService:
                 client_errors[provider] = str(exc)
                 return None
 
+        # Each record's change is saved RIGHT AWAY (below), instead of once at
+        # the very end for the whole run. Reason: reload_config() is called
+        # very often from elsewhere (every /api/status poll from the open
+        # dashboard, every other Web UI route) - and, since 2026-09-07, it
+        # merges fresh on-disk data into the SAME record objects in place
+        # (see reload_config()'s docstring) rather than replacing self.config
+        # wholesale. That fixed the much worse "entire run's work silently
+        # discarded" bug, but on its own it opened a narrower follow-up race:
+        # a sync run that takes a while (several records, each a real network
+        # round-trip to the provider) computes a record's new status early on
+        # but - under the old "save once at the end" scheme - wouldn't
+        # persist it until the whole run finished. Any reload_config() poll
+        # landing in that window would merge the (still unsaved-elsewhere,
+        # i.e. stale) on-disk data straight into this SAME record object,
+        # reverting the just-computed change - and the final save at the end
+        # would then persist that reverted state, discarding this record's
+        # result even though the provider-side change (e.g. actually creating
+        # the DNS record again after re-enabling it) had genuinely gone
+        # through. Symptom: a record's status gets stuck (e.g. on
+        # "disabled") right after a triggered sync, only to correct itself on
+        # a later run whose timing happens not to collide. Saving each
+        # record immediately - under the same lock reload_config() uses for
+        # its merge - closes that window: by the time any concurrent reload
+        # reads the file, this record's latest result is already in it.
         any_change = False
         for record in self.config["records"]:
             if not record.get("enabled", True):
@@ -271,6 +308,7 @@ class DDNSService:
                 record["last_error"] = msg
                 summary["errors"] += 1
                 any_change = True
+                self._save_locked()
                 continue
 
             provider = record.get("provider", "domainchief")
@@ -282,29 +320,33 @@ class DDNSService:
                 record["last_error"] = msg
                 summary["errors"] += 1
                 any_change = True
+                self._save_locked()
                 continue
 
             try:
                 result = self._sync_record(client, record, current_ip)
                 summary[result] = summary.get(result, 0) + 1
                 any_change = True
+                self._save_locked()
             except ProviderRateLimitError as exc:
                 logger.warning("Rate limit hit for %s, will retry on the next run.", self._record_label(record))
                 record["last_status"] = "error"
                 record["last_error"] = str(exc)
                 summary["errors"] += 1
                 any_change = True
+                self._save_locked()
             except ProviderError as exc:
                 logger.error("Error on %s: %s", self._record_label(record), exc)
                 record["last_status"] = "error"
                 record["last_error"] = str(exc)
                 summary["errors"] += 1
                 any_change = True
+                self._save_locked()
 
         self.last_run_at = _status_timestamp()
         self.last_run_error = "; ".join(f"{p}: {m}" for p, m in client_errors.items()) or None
         if any_change:
-            self._save()
+            self._save_locked()
         logger.info(
             "Sync finished: %s checked, %s created, %s updated, %s unchanged, %s errors",
             summary["checked"], summary["created"], summary["updated"], summary["unchanged"], summary["errors"],
@@ -423,16 +465,17 @@ class DDNSService:
                 logger.info("%s: old record removed at %s (subdomain/type/provider changed via edit)", self._record_label(record), old_provider)
             except ProviderError as exc:
                 logger.warning("Could not remove old record at %s after edit: %s", old_provider, exc)
-        updated = config_module.update_record(
-            self.config,
-            record_id,
-            name=name,
-            record_type=record_type,
-            ttl=ttl,
-            comment=comment,
-            provider=new_provider,
-            proxied=proxied,
-        )
+        with self._state_lock:
+            updated = config_module.update_record(
+                self.config,
+                record_id,
+                name=name,
+                record_type=record_type,
+                ttl=ttl,
+                comment=comment,
+                provider=new_provider,
+                proxied=proxied,
+            )
         if updated is None:
             raise KeyError(f"Unknown record: {record_id}")
         self.trigger_now()
@@ -452,7 +495,8 @@ class DDNSService:
             except ProviderError as exc:
                 logger.error("Could not delete record at %s: %s", record.get("provider", "domainchief"), exc)
                 raise
-        config_module.remove_record(self.config, record_id)
+        with self._state_lock:
+            config_module.remove_record(self.config, record_id)
         # Trigger an immediate sync, analogous to creating/editing - e.g. so that
         # needs_ipv4/needs_ipv6 (depends on the remaining records) and the
         # dashboard status update without waiting for the check interval.
@@ -486,7 +530,7 @@ class DDNSService:
 
         if enabled:
             record["enabled"] = True
-            self._save()
+            self._save_locked()
             self.trigger_now()
             return record
 
@@ -506,7 +550,7 @@ class DDNSService:
         record["last_status"] = "disabled"
         record["last_error"] = None
         record["last_sync_at"] = _status_timestamp()
-        self._save()
+        self._save_locked()
         return record
 
     # ------------------------------------------------------------------
@@ -613,18 +657,19 @@ class DDNSService:
             record_type = item.get("type") or ""
             if not domain or record_type not in ("A", "AAAA"):
                 continue
-            config_module.import_record(
-                self.config,
-                domain=domain,
-                name=item.get("name", ""),
-                record_type=record_type,
-                ttl=item.get("ttl", 300),
-                comment=item.get("comment", ""),
-                provider=provider,
-                proxied=item.get("proxied", False),
-                dns_record_id=item.get("dns_record_id"),
-                current_ip=item.get("content", ""),
-            )
+            with self._state_lock:
+                config_module.import_record(
+                    self.config,
+                    domain=domain,
+                    name=item.get("name", ""),
+                    record_type=record_type,
+                    ttl=item.get("ttl", 300),
+                    comment=item.get("comment", ""),
+                    provider=provider,
+                    proxied=item.get("proxied", False),
+                    dns_record_id=item.get("dns_record_id"),
+                    current_ip=item.get("content", ""),
+                )
             count += 1
         if count:
             self.trigger_now()
