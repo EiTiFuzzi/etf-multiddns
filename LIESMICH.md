@@ -11,6 +11,8 @@
   <a href="https://github.com/EiTiFuzzi/etf-multiddns/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/EiTiFuzzi/etf-multiddns/ci.yml?branch=main&label=CI" alt="CI-Status"></a>
   <a href="https://github.com/EiTiFuzzi/etf-multiddns/pkgs/container/etf-multiddns"><img src="https://img.shields.io/badge/ghcr.io-etf--multiddns-blue?logo=docker&logoColor=white" alt="Container-Image auf ghcr.io"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/EiTiFuzzi/etf-multiddns" alt="Lizenz"></a>
+  <a href="https://codeberg.org/eitifuzzi/etf-multiddns"><img src="https://img.shields.io/badge/Codeberg-Mirror-2185D0?logo=codeberg&logoColor=white" alt="Mirror auf Codeberg"></a>
+  <a href="https://ko-fi.com/eitifuzzi"><img src="https://img.shields.io/badge/Ko--fi-Unterst%C3%BCtzen-FF5E5B?logo=ko-fi&logoColor=white" alt="Unterstützen auf Ko-fi"></a>
 </p>
 
 Ein kleiner Docker-Container, der A/AAAA-Records bei [Domain Chief](https://domain.chief.app)

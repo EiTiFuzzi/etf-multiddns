@@ -11,6 +11,8 @@
   <a href="https://github.com/EiTiFuzzi/etf-multiddns/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/EiTiFuzzi/etf-multiddns/ci.yml?branch=main&label=CI" alt="CI status"></a>
   <a href="https://github.com/EiTiFuzzi/etf-multiddns/pkgs/container/etf-multiddns"><img src="https://img.shields.io/badge/ghcr.io-etf--multiddns-blue?logo=docker&logoColor=white" alt="Container image on ghcr.io"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/EiTiFuzzi/etf-multiddns" alt="License"></a>
+  <a href="https://codeberg.org/eitifuzzi/etf-multiddns"><img src="https://img.shields.io/badge/Codeberg-mirror-2185D0?logo=codeberg&logoColor=white" alt="Mirror on Codeberg"></a>
+  <a href="https://ko-fi.com/eitifuzzi"><img src="https://img.shields.io/badge/Ko--fi-support-FF5E5B?logo=ko-fi&logoColor=white" alt="Support on Ko-fi"></a>
 </p>
 
 A small Docker container that automatically updates A/AAAA records at [Domain Chief](https://domain.chief.app)
