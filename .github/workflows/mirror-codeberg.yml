@@ -1,0 +1,53 @@
+name: Mirror to Codeberg
+
+# Keeps https://codeberg.org/eitifuzzi/etf-multiddns in sync with this
+# repository. Codeberg disabled its own "pull mirror" feature instance-wide
+# ("Pull mirrors have been disabled by your site administrator.") - too many
+# abandoned mirrors ate up their donation-funded storage/traffic over time,
+# see docs.codeberg.org/getting-started/faq. Their own recommended
+# replacement is to push from the source side instead, so that's what this
+# does: a full "git push --mirror" from a fresh bare clone of this repo,
+# which pushes every branch and tag to Codeberg (and removes anything there
+# that no longer exists here) - a complete mirror, not just the default
+# branch.
+#
+# One-time setup required before this works:
+#   1. On Codeberg: click your avatar -> Settings -> Applications -> under
+#      "Manage Access Tokens", generate a new token with at least
+#      "repository" read+write permission.
+#   2. On GitHub: Settings -> Secrets and variables -> Actions -> "New
+#      repository secret" -> name it CODEBERG_TOKEN, paste the token as the
+#      value.
+# Without that secret, this workflow will fail at the push step (clear error
+# in the Actions log, nothing else breaks).
+
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+  workflow_dispatch: {}
+  schedule:
+    # Safety net in case a push-triggered run is ever missed or fails
+    # silently (e.g. a transient Codeberg outage) - keeps the mirror from
+    # drifting for more than a day even then.
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mirror-push to Codeberg
+        env:
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CODEBERG_TOKEN}" ]; then
+            echo "::error::CODEBERG_TOKEN repository secret is not set - see the comment at the top of this workflow file for setup steps."
+            exit 1
+          fi
+          git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" repo-mirror
+          cd repo-mirror
+          git push --mirror "https://eitifuzzi:${CODEBERG_TOKEN}@codeberg.org/eitifuzzi/etf-multiddns.git"
