@@ -1,17 +1,28 @@
 name: Release image
 
 # Builds the Docker image and publishes it to the GitHub Container Registry
-# (ghcr.io) as soon as a GitHub Release is published. That way nobody needs
-# to run "docker build" locally anymore - a "docker pull" is enough.
+# (ghcr.io) AND Codeberg's container registry (codeberg.org) as soon as a
+# GitHub Release is published. That way nobody needs to run "docker build"
+# locally anymore - a "docker pull" is enough, from either registry.
 #
 # Flow:
 #   1. Create and push a tag, e.g.: git tag v1.0.0 && git push origin v1.0.0
 #   2. On GitHub, under "Releases" -> "Draft a new release", pick the tag
 #      and publish it (or: gh release create v1.0.0 --generate-notes)
-#   3. This workflow automatically builds (amd64 + arm64) and pushes to
-#      ghcr.io/<owner>/<repo>:1.0.0 and ghcr.io/<owner>/<repo>:latest
-#      (owner/repo are automatically lowercased in the process, even if
-#      your GitHub username contains uppercase letters)
+#   3. This workflow automatically builds ONCE (amd64 + arm64) and pushes
+#      the same image to:
+#        - ghcr.io/<owner>/<repo>:1.0.0 and ghcr.io/<owner>/<repo>:latest
+#          (owner/repo are automatically lowercased in the process, even if
+#          your GitHub username contains uppercase letters)
+#        - codeberg.org/eitifuzzi/etf-multiddns:1.0.0 and :latest
+#
+# The Codeberg push reuses the same CODEBERG_TOKEN repository secret set up
+# for mirror-codeberg.yml (see the comment at the top of that file) - it
+# additionally needs "package write" scope on Codeberg for this to work. If
+# the token was only granted "repository" scope, extend its permissions (or
+# create a second token) under Codeberg -> Settings -> Applications ->
+# Manage Access Tokens. Without that scope, only the Codeberg login/push
+# steps fail with a clear error; the ghcr.io push is unaffected.
 
 on:
   release:
@@ -42,6 +53,27 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Check CODEBERG_TOKEN is set
+        # Without this, the login step below fails with a generic
+        # "unauthorized" or "empty password" error that doesn't point at
+        # the actual cause - the same CODEBERG_TOKEN repository secret used
+        # by mirror-codeberg.yml needs "package write" scope as well. If it
+        # was only ever granted "repository" scope for the git mirror, add
+        # package permissions to it (or create a second token) under
+        # Codeberg -> Settings -> Applications -> Manage Access Tokens.
+        run: |
+          if [ -z "${{ secrets.CODEBERG_TOKEN }}" ]; then
+            echo "::error::CODEBERG_TOKEN repository secret is not set - see the comment at the top of mirror-codeberg.yml for setup steps. It also needs 'package write' scope for this Codeberg registry push to work."
+            exit 1
+          fi
+
+      - name: Log in to Codeberg Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: codeberg.org
+          username: eitifuzzi
+          password: ${{ secrets.CODEBERG_TOKEN }}
+
       - name: Lowercase the repository name
         # Docker/OCI image names must be entirely lowercase, but a GitHub
         # username/repo (e.g. "SomeUser/ETF-MultiDDNS") is allowed to
@@ -55,7 +87,13 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.repo.outputs.image }}
+          # One build is pushed to both registries: metadata-action applies
+          # the same tag/label rules below to each entry in "images", so
+          # this produces e.g. ghcr.io/.../etf-multiddns:1.0.0 AND
+          # codeberg.org/eitifuzzi/etf-multiddns:1.0.0 from a single run.
+          images: |
+            ${{ steps.repo.outputs.image }}
+            codeberg.org/eitifuzzi/etf-multiddns
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}

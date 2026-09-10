@@ -5,26 +5,35 @@ name: Mirror to Codeberg
 # ("Pull mirrors have been disabled by your site administrator.") - too many
 # abandoned mirrors ate up their donation-funded storage/traffic over time,
 # see docs.codeberg.org/getting-started/faq. Their own recommended
-# replacement is to push from the source side instead, so that's what this
-# does: a full "git push --mirror" from a fresh bare clone of this repo,
-# which pushes every branch and tag to Codeberg (and removes anything there
-# that no longer exists here) - a complete mirror, not just the default
-# branch.
+# replacement is to push from the source side instead, so this workflow has
+# two jobs:
 #
-# One-time setup required before this works:
+#   - "mirror": a full "git push --mirror" from a fresh bare clone of this
+#     repo, which pushes every branch and TAG to Codeberg (and removes
+#     anything there that no longer exists here).
+#   - "create-release": a GitHub "Release" (title + notes) is a platform
+#     feature layered on top of a tag, not a git object itself - so pushing
+#     the tag does NOT bring the release along with it. This job runs when a
+#     GitHub Release is published and creates (or updates, if one already
+#     exists for that tag) the matching Release on Codeberg via its API,
+#     copying over the tag, title and notes.
+#
+# One-time setup required before either job works:
 #   1. On Codeberg: click your avatar -> Settings -> Applications -> under
 #      "Manage Access Tokens", generate a new token with at least
 #      "repository" read+write permission.
 #   2. On GitHub: Settings -> Secrets and variables -> Actions -> "New
 #      repository secret" -> name it CODEBERG_TOKEN, paste the token as the
 #      value.
-# Without that secret, this workflow will fail at the push step (clear error
-# in the Actions log, nothing else breaks).
+# Without that secret, the relevant job fails with a clear error in the
+# Actions log; nothing else breaks.
 
 on:
   push:
     branches: ['**']
     tags: ['**']
+  release:
+    types: [published]
   workflow_dispatch: {}
   schedule:
     # Safety net in case a push-triggered run is ever missed or fails
@@ -37,6 +46,9 @@ permissions:
 
 jobs:
   mirror:
+    # The git-level mirror push only; the release-metadata job below handles
+    # the "release" event on its own, so it isn't needed again here.
+    if: github.event_name != 'release'
     runs-on: ubuntu-latest
     steps:
       - name: Mirror-push to Codeberg
@@ -51,3 +63,49 @@ jobs:
           git clone --mirror "https://github.com/${GITHUB_REPOSITORY}.git" repo-mirror
           cd repo-mirror
           git push --mirror "https://eitifuzzi:${CODEBERG_TOKEN}@codeberg.org/eitifuzzi/etf-multiddns.git"
+
+  create-release:
+    # Only the underlying tag needs the git-level mirror above (it's already
+    # covered by this same push, since publishing a GitHub Release requires
+    # the tag to exist) - this job only has to carry the Release metadata
+    # (title/notes) across, via the Codeberg/Forgejo API.
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mirror release metadata to Codeberg
+        env:
+          CODEBERG_TOKEN: ${{ secrets.CODEBERG_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
+          RELEASE_NAME: ${{ github.event.release.name }}
+          RELEASE_BODY: ${{ github.event.release.body }}
+          IS_PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CODEBERG_TOKEN}" ]; then
+            echo "::error::CODEBERG_TOKEN repository secret is not set - see the comment at the top of this workflow file for setup steps."
+            exit 1
+          fi
+          API="https://codeberg.org/api/v1/repos/eitifuzzi/etf-multiddns/releases"
+
+          payload=$(jq -n \
+            --arg tag "$TAG_NAME" \
+            --arg name "$RELEASE_NAME" \
+            --arg body "$RELEASE_BODY" \
+            --argjson prerelease "${IS_PRERELEASE}" \
+            '{tag_name: $tag, name: $name, body: $body, prerelease: $prerelease, draft: false}')
+
+          # Idempotent: if this tag's release already exists on Codeberg
+          # (e.g. this workflow ran for it before, or someone created it by
+          # hand), update it instead of failing on a duplicate.
+          existing_id=$(curl -sS -H "Authorization: token ${CODEBERG_TOKEN}" \
+            "${API}/tags/${TAG_NAME}" | jq -r '.id // empty')
+
+          if [ -n "${existing_id}" ]; then
+            echo "Release for ${TAG_NAME} already exists on Codeberg (id ${existing_id}), updating it."
+            curl -sS --fail -X PATCH -H "Authorization: token ${CODEBERG_TOKEN}" -H "Content-Type: application/json" \
+              -d "${payload}" "${API}/${existing_id}" -o /dev/null -w "HTTP %{http_code}\n"
+          else
+            echo "Creating new release for ${TAG_NAME} on Codeberg."
+            curl -sS --fail -X POST -H "Authorization: token ${CODEBERG_TOKEN}" -H "Content-Type: application/json" \
+              -d "${payload}" "${API}" -o /dev/null -w "HTTP %{http_code}\n"
+          fi
