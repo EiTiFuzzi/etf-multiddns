@@ -243,10 +243,14 @@ Cloudflare-managed record.
 ## Security notes
 
 - The Web UI is protected by login (see above, the setup wizard or `WEBUI_USERNAME` /
-  `WEBUI_PASSWORD`). However, there is **no CSRF protection** and **no brute-force/rate-limit
-  protection** for the login. It's still intended to primarily be reachable within your own (home)
-  network - don't expose it unprotected directly to the internet. If external access is desired,
-  put a reverse proxy with its own auth/SSO and rate limiting in front of it as well.
+  `WEBUI_PASSWORD`). All state-changing requests carry a CSRF token, the session cookie is
+  `SameSite=Lax`, and failed password / 2FA attempts are rate limited (8 wrong passwords or 5 wrong
+  2FA codes within 15 minutes block that client address for the rest of the window; the counters are
+  kept in memory and reset on restart). Changing the Web UI credentials requires the current password.
+  Behind a reverse proxy all clients appear with the proxy's address and therefore share one
+  allowance. It's still intended to primarily be reachable within your own (home) network - don't
+  expose it unprotected directly to the internet. If external access is desired, put a reverse proxy
+  with its own auth/SSO in front of it as well.
 - HTTPS (see above) protects the connection itself (credentials/session cookie in transit) but doesn't
   replace a reverse proxy for internet-facing setups - the self-signed certificate in particular isn't
   trusted by browsers/clients out of the box. For anything beyond your own local network, prefer a
@@ -254,7 +258,8 @@ Cloudflare-managed record.
   or import that certificate directly under Settings -> HTTPS.
 - The session cookie is signed with a key that is automatically generated on first start and
   permanently stored in `config/config.json` (`secret_key`). Anyone with write access to this file can
-  forge valid sessions with it - the file should accordingly only be readable by the container itself.
+  forge valid sessions with it - the file should accordingly only be readable by the container itself
+  (it is written with owner-only permissions, `0600`; files from older versions are tightened on start).
 - The password is not stored in plain text, but as a hash (`werkzeug.security`, scrypt). The same
   applies to 2FA recovery codes; the TOTP secret itself is stored as-is (it must be, to compute/verify
   codes), so `config/config.json` should be treated as sensitive either way.

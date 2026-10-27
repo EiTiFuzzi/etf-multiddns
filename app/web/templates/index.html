@@ -34,6 +34,7 @@
 
   <div class="form-actions">
     <form method="post" action="{{ url_for('sync_now') }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn btn-primary">{{ t('dashboard.sync_now') }}</button>
     </form>
     <a href="{{ url_for('new_record_form') }}" class="btn">{{ t('new_record.title') }}</a>
@@ -141,6 +142,7 @@
           <td class="col-last-sync">{{ format_ts(r.last_sync_at) or "-" }}</td>
           <td>
             <form method="post" action="{{ url_for('toggle_record', record_id=r.id) }}" class="inline-form toggle-form">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <label class="switch" title="{{ t('dashboard.btn_on') if r.enabled else t('dashboard.btn_off') }}">
                 <input type="checkbox" class="switch-input" {{ 'checked' if r.enabled else '' }}
                        aria-label="{{ t('dashboard.th_active') }}: {{ host_text }}"
@@ -160,6 +162,7 @@
           <td>
             <form method="post" action="{{ url_for('delete_record', record_id=r.id) }}" class="inline-form"
                   onsubmit="return confirm('{{ t('dashboard.confirm_delete') }}');">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
               <button type="submit" class="btn btn-small btn-icon btn-danger"
                       title="{{ t('dashboard.btn_delete') }}" aria-label="{{ t('dashboard.btn_delete') }}">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">

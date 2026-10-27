@@ -11,6 +11,7 @@
   {% endif %}
 
   <form method="post" action="{{ url_for('edit_record', record_id=record.id) if record else url_for('create_record') }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>
       {{ t('new_record.label_provider') }}
       <select name="provider" id="provider-select">

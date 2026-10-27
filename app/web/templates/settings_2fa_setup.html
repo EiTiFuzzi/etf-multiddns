@@ -15,6 +15,7 @@
   </p>
 
   <form method="post" action="{{ url_for('confirm_2fa_setup') }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>
       {{ t('settings.totp_label_code') }}
       <input type="text" name="code" autocomplete="one-time-code" autofocus required

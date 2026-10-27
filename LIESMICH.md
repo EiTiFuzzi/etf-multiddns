@@ -257,10 +257,15 @@ docker exec -it etf-multiddns python -m app.cli sync
 ## Sicherheitshinweise
 
 - Das Web-UI ist per Login geschützt (siehe oben, Ersteinrichtungs-Assistent bzw. `WEBUI_USERNAME` /
-  `WEBUI_PASSWORD`). Es gibt aber **keinen CSRF-Schutz** und **keinen Brute-Force-/Rate-Limit-Schutz**
-  für den Login. Es ist weiterhin dafür gedacht, primär im eigenen (Heim-)Netzwerk erreichbar zu sein -
-  nicht ungeschützt direkt ins Internet exponieren. Falls externer Zugriff gewünscht ist, zusätzlich
-  einen Reverse Proxy mit eigenem Auth/SSO und Rate-Limiting davor schalten.
+  `WEBUI_PASSWORD`). Alle zustandsändernden Anfragen tragen ein CSRF-Token, das Session-Cookie ist
+  `SameSite=Lax`, und fehlgeschlagene Passwort-/2FA-Versuche sind begrenzt (8 falsche Passwörter oder
+  5 falsche 2FA-Codes innerhalb von 15 Minuten sperren die Client-Adresse für den Rest des Zeitfensters;
+  die Zähler liegen im Arbeitsspeicher und werden beim Neustart zurückgesetzt). Das Ändern der
+  Web-UI-Zugangsdaten verlangt das aktuelle Passwort. Hinter einem Reverse Proxy erscheinen alle
+  Clients mit der Adresse des Proxys und teilen sich damit ein Kontingent. Es ist weiterhin dafür
+  gedacht, primär im eigenen (Heim-)Netzwerk erreichbar zu sein - nicht ungeschützt direkt ins Internet
+  exponieren. Falls externer Zugriff gewünscht ist, zusätzlich einen Reverse Proxy mit eigenem Auth/SSO
+  davor schalten.
 - HTTPS (siehe oben) schützt die Verbindung selbst (Zugangsdaten/Session-Cookie während der
   Übertragung), ersetzt aber bei internetseitig erreichbaren Setups keinen Reverse Proxy - insbesondere
   das selbstsignierte Zertifikat ist Browsern/Clients gegenüber nicht von Haus aus vertrauenswürdig.
@@ -270,7 +275,8 @@ docker exec -it etf-multiddns python -m app.cli sync
 - Das Session-Cookie wird mit einem beim ersten Start automatisch generierten, dauerhaft in
   `config/config.json` gespeicherten Schlüssel signiert (`secret_key`). Wer Schreibzugriff auf diese
   Datei hat, kann damit gültige Sessions fälschen - die Datei sollte entsprechend nur für den Container
-  selbst lesbar sein.
+  selbst lesbar sein (sie wird mit Rechten nur für den Besitzer geschrieben, `0600`; Dateien älterer
+  Versionen werden beim Start entsprechend eingeschränkt).
 - Das Passwort wird nicht im Klartext gespeichert, sondern als Hash (`werkzeug.security`, scrypt).
   Gleiches gilt für 2FA-Wiederherstellungscodes; das TOTP-Geheimnis selbst wird unverändert gespeichert
   (das ist notwendig, um Codes berechnen/prüfen zu können) - `config/config.json` sollte also so oder so

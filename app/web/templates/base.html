@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}{{ t('brand') }}{% endblock %}</title>
   <script>
     // Run early (before CSS rendering), so it doesn't briefly flash the wrong
@@ -119,6 +120,7 @@
         </svg>
       </button>
       <form method="post" action="{{ url_for('logout') }}" class="inline-form">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-small btn-icon" aria-label="{{ t('nav.logout') }}" title="{{ t('nav.logout') }}">
           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>

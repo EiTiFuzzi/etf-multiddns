@@ -27,6 +27,7 @@
       <p class="empty">{{ t('import.no_candidates') }}</p>
     {% else %}
       <form method="post" action="{{ url_for('import_records') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <div class="table-scroll">
         <table class="records">
           <thead>

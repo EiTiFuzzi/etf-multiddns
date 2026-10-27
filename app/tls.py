@@ -98,17 +98,16 @@ def generate_self_signed(hostname: str, cert_path: Path = SELF_SIGNED_CERT, key_
 
     cert_path.parent.mkdir(parents=True, exist_ok=True)
     cert_path.write_bytes(cert.public_bytes(serialization.Encoding.PEM))
-    key_path.write_bytes(
+    # The private key is created with owner-only permissions from the start
+    # (no chmod-after-write window), see config.write_private_file().
+    config_module.write_private_file(
+        key_path,
         key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
-        )
+        ),
     )
-    try:
-        key_path.chmod(0o600)
-    except OSError:  # pragma: no cover - defensive, e.g. unsupported on some volumes
-        pass
     logger.info("Generated a new self-signed certificate (CN=%s).", common_name)
 
 
@@ -174,11 +173,7 @@ def save_custom_cert(cert_pem: bytes, key_pem: bytes) -> None:
 
     CUSTOM_CERT.parent.mkdir(parents=True, exist_ok=True)
     CUSTOM_CERT.write_bytes(cert_pem)
-    CUSTOM_KEY.write_bytes(key_pem)
-    try:
-        CUSTOM_KEY.chmod(0o600)
-    except OSError:  # pragma: no cover - defensive
-        pass
+    config_module.write_private_file(CUSTOM_KEY, key_pem)
     logger.info("Imported a custom certificate.")
 
 

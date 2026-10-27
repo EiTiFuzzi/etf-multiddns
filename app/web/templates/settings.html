@@ -10,6 +10,7 @@
   {% endif %}
 
   <form method="post" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>
       {{ t('settings.label_token') }}
       <input type="password" name="api_token" placeholder="{{ t('settings.token_placeholder_set') if api_token_set else 'ctp_...' }}"
@@ -101,9 +102,14 @@
   {% endif %}
 
   <form method="post" action="{{ url_for('save_webui_credentials') }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>
       {{ t('settings.label_username') }}
       <input type="text" name="username" value="{{ webui_username }}" autocomplete="username" {{ 'disabled' if webui_from_env else '' }}>
+    </label>
+    <label>
+      {{ t('settings.label_current_password') }}
+      <input type="password" name="current_password" autocomplete="current-password" required {{ 'disabled' if webui_from_env else '' }}>
     </label>
     <label>
       {{ t('settings.label_new_password') }}
@@ -137,6 +143,7 @@
 
     <form method="post" action="{{ url_for('disable_2fa') }}" class="form"
           onsubmit="return confirm('{{ t('settings.totp_confirm_disable') }}');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <label>
         {{ t('settings.totp_label_code_confirm') }}
         <input type="text" name="code" autocomplete="one-time-code" required>
@@ -148,6 +155,7 @@
 
     <form method="post" action="{{ url_for('regenerate_recovery_codes') }}" class="form-actions"
           onsubmit="return confirm('{{ t('settings.totp_confirm_regenerate') }}');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button type="submit" class="btn">{{ t('settings.totp_btn_regenerate_recovery') }}</button>
     </form>
   {% else %}
@@ -168,6 +176,7 @@
   {% endif %}
 
   <form method="post" action="{{ url_for('save_https_settings') }}" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="form-checkbox">
       <input type="checkbox" name="https_enabled" {{ 'checked' if https_enabled else '' }}>
       {{ t('settings.https_enable') }}
@@ -203,6 +212,7 @@
     <p class="hint">{{ t('settings.https_cert_none') }}</p>
   {% endif %}
   <form method="post" action="{{ url_for('regenerate_https_cert') }}" class="form-actions">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <button type="submit" class="btn">{{ t('settings.https_btn_regenerate') }}</button>
   </form>
 
@@ -217,6 +227,7 @@
     <p class="hint">{{ t('settings.https_no_custom_cert') }}</p>
   {% endif %}
   <form method="post" action="{{ url_for('upload_https_cert') }}" enctype="multipart/form-data" class="form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <div>
       <span class="file-field-label">{{ t('settings.https_upload_cert_label') }}</span>
       <div class="file-input">
@@ -244,10 +255,14 @@
   </form>
 
   <script>
+    function csrfToken() {
+      return document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    }
+
     async function testConnection() {
       const resultEl = document.getElementById('test-result');
       resultEl.textContent = '{{ t("settings.testing") }}';
-      const res = await fetch("{{ url_for('test_connection') }}", { method: 'POST' });
+      const res = await fetch("{{ url_for('test_connection') }}", { method: 'POST', headers: { 'X-CSRF-Token': csrfToken() } });
       const data = await res.json();
       resultEl.textContent = data.message;
       resultEl.className = data.ok ? 'alert alert-info' : 'alert alert-error';
@@ -256,7 +271,7 @@
     async function testCloudflareConnection() {
       const resultEl = document.getElementById('cloudflare-test-result');
       resultEl.textContent = '{{ t("settings.testing") }}';
-      const res = await fetch("{{ url_for('test_cloudflare_connection') }}", { method: 'POST' });
+      const res = await fetch("{{ url_for('test_cloudflare_connection') }}", { method: 'POST', headers: { 'X-CSRF-Token': csrfToken() } });
       const data = await res.json();
       resultEl.textContent = data.message;
       resultEl.className = data.ok ? 'alert alert-info' : 'alert alert-error';

@@ -225,6 +225,7 @@ def load_config() -> dict:
         except (json.JSONDecodeError, OSError) as exc:
             logger.error("Could not read configuration (%s), using defaults.", exc)
             data = {}
+        _tighten_config_permissions()
         config = _merge_defaults(data)
 
     # Environment variables take precedence for sensitive / deployment-specific values.
@@ -269,12 +270,47 @@ def save_config(config: dict) -> None:
         _write(config)
 
 
+def write_private_file(path: Path, data: bytes) -> None:
+    """Writes data to path atomically (temp file + rename) and with
+    owner-only permissions (0600) from the very first byte - the file is
+    created with that mode instead of being chmod-ed afterwards, so there is
+    no window in which it is readable by other users of the host/volume.
+    Used for everything that holds secrets (config.json, TLS private keys)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_name(path.name + ".tmp")
+    fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    try:
+        with os.fdopen(fd, "wb") as fh:
+            fh.write(data)
+    except BaseException:
+        tmp_path.unlink(missing_ok=True)
+        raise
+    try:
+        # O_CREAT only applies the mode to NEW files; a leftover temp file
+        # from an earlier crash would keep its old permissions.
+        tmp_path.chmod(0o600)
+    except OSError:  # pragma: no cover - defensive, e.g. unsupported on some volumes
+        pass
+    tmp_path.replace(path)
+
+
 def _write(config: dict) -> None:
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = CONFIG_PATH.with_suffix(".tmp")
-    with tmp_path.open("w", encoding="utf-8") as fh:
-        json.dump(config, fh, indent=2, ensure_ascii=False)
-    tmp_path.replace(CONFIG_PATH)
+    payload = json.dumps(config, indent=2, ensure_ascii=False).encode("utf-8")
+    write_private_file(CONFIG_PATH, payload)
+
+
+def _tighten_config_permissions() -> None:
+    """config.json holds API tokens, the TOTP secret and the session signing
+    key in cleartext. Files written by older versions have default
+    permissions (typically 0644, readable by every user on the host when the
+    folder is bind-mounted) - narrow them down to the owner on startup.
+    Best effort: some volume types don't support chmod."""
+    try:
+        if CONFIG_PATH.exists() and CONFIG_PATH.stat().st_mode & 0o077:
+            CONFIG_PATH.chmod(0o600)
+            logger.info("Restricted permissions of %s to 0600 (owner only).", CONFIG_PATH)
+    except OSError:  # pragma: no cover - defensive
+        pass
 
 
 def add_record(

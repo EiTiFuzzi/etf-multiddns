@@ -14,6 +14,7 @@ import logging
 import os
 import secrets as secrets_module
 from datetime import timedelta
+from urllib.parse import urlsplit
 
 from flask import Flask, g, jsonify, make_response, redirect, render_template, request, session, url_for
 from werkzeug.security import check_password_hash, generate_password_hash
@@ -25,6 +26,7 @@ from ..cloudflare_client import CloudflareClient, CloudflareError
 from ..ddns import DDNSService
 from ..domainchief_client import DomainChiefClient, DomainChiefError
 from ..https_server import HttpsServerManager, https_port
+from ..throttle import FailureThrottle
 from .i18n import DEFAULT_LANG, LANGUAGES, LANGUAGE_LABELS, translator
 
 # Both providers' errors, handled generically wherever a route doesn't need to
@@ -40,6 +42,55 @@ LANG_COOKIE_MAX_AGE = 60 * 60 * 24 * 365  # 1 year
 # login_2fa is reachable pre-login too - it guards itself via the
 # "awaiting_2fa" session flag set by login() (see below).
 PUBLIC_ENDPOINTS = {"login", "login_2fa", "setup", "set_language", "static"}
+
+# Brute-force protection (see app/throttle.py): wrong password / 2FA code
+# attempts allowed per client address within the window before it is blocked.
+LOGIN_MAX_FAILURES = 8
+TOTP_MAX_FAILURES = 5
+# 2FA is only reachable after the password step, so an attacker already
+# knows the password - additionally cap failures across ALL addresses, so
+# rotating source IPs doesn't multiply the number of guesses.
+TOTP_GLOBAL_MAX_FAILURES = 20
+THROTTLE_WINDOW_SECONDS = 15 * 60
+
+CSRF_SESSION_KEY = "csrf_token"
+CSRF_FORM_FIELD = "csrf_token"
+CSRF_HEADER = "X-CSRF-Token"
+UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
+
+
+def _safe_equals(a: str, b: str) -> bool:
+    """Constant-time string comparison that also works for non-ASCII input
+    (secrets.compare_digest raises TypeError for non-ASCII str arguments,
+    which used to turn a login attempt with e.g. "Jürgen" into an HTTP 500)."""
+    return secrets_module.compare_digest((a or "").encode("utf-8"), (b or "").encode("utf-8"))
+
+
+def _safe_next(target: str | None) -> str:
+    """Only lets a "next" redirect target through if it is a plain path on
+    THIS site - never an absolute URL, protocol-relative "//host" or
+    backslash variant that browsers would treat as another host."""
+    fallback = url_for("index")
+    if not target or not target.startswith("/") or target.startswith(("//", "/\\")):
+        return fallback
+    if "\\" in target or any(ord(ch) < 32 for ch in target):
+        return fallback
+    parts = urlsplit(target)
+    if parts.scheme or parts.netloc:
+        return fallback
+    return target
+
+
+def _client_key() -> str:
+    return request.remote_addr or "unknown"
+
+
+def _csrf_token() -> str:
+    token = session.get(CSRF_SESSION_KEY)
+    if not token:
+        token = secrets_module.token_urlsafe(32)
+        session[CSRF_SESSION_KEY] = token
+    return token
 
 
 def _env_webui_credentials() -> tuple[str, str] | None:
@@ -60,18 +111,33 @@ def _check_webui_credentials(cfg: dict, username: str, password: str) -> bool:
     env_creds = _env_webui_credentials()
     if env_creds is not None:
         env_user, env_pass = env_creds
-        return secrets_module.compare_digest(username, env_user) and secrets_module.compare_digest(password, env_pass)
+        return _safe_equals(username, env_user) & _safe_equals(password, env_pass)
     stored_user = cfg.get("webui_username", "")
     stored_hash = cfg.get("webui_password_hash", "")
     if not stored_user or not stored_hash:
         return False
-    return secrets_module.compare_digest(username, stored_user) and check_password_hash(stored_hash, password)
+    return _safe_equals(username, stored_user) & check_password_hash(stored_hash, password)
 
 
 def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask:
     app = Flask(__name__)
     app.config["SECRET_KEY"] = service.config.get("secret_key") or secrets_module.token_hex(32)
     app.permanent_session_lifetime = timedelta(days=30)
+    # Cross-site requests don't carry the session cookie (defense in depth next
+    # to the CSRF token below). Not "Secure": the UI is also served over plain
+    # HTTP on port 8080, a Secure cookie would never be sent there.
+    app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+    app.config["SESSION_COOKIE_HTTPONLY"] = True
+
+    login_throttle = FailureThrottle(LOGIN_MAX_FAILURES, THROTTLE_WINDOW_SECONDS)
+    totp_throttle = FailureThrottle(TOTP_MAX_FAILURES, THROTTLE_WINDOW_SECONDS)
+    totp_global_throttle = FailureThrottle(TOTP_GLOBAL_MAX_FAILURES, THROTTLE_WINDOW_SECONDS)
+
+    def _totp_retry_after() -> int:
+        return max(totp_throttle.retry_after(_client_key()), totp_global_throttle.retry_after("*"))
+
+    def _throttled_message(retry_after: int) -> str:
+        return g.t("login.error_throttled").format(minutes=max(1, -(-retry_after // 60)))
 
     # ------------------------------------------------------------------
     # Language: stored via cookie, determined before every request.
@@ -83,6 +149,27 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
             lang = DEFAULT_LANG
         g.lang = lang
         g.t = translator(lang)
+
+    @app.before_request
+    def _check_csrf():
+        """Every state-changing request must carry the per-session token
+        (hidden form field, or X-CSRF-Token header for fetch() calls) - a
+        third-party page can make the browser send the session cookie along
+        with a forged request, but cannot know this token."""
+        if request.method not in UNSAFE_METHODS:
+            return None
+        expected = session.get(CSRF_SESSION_KEY, "")
+        supplied = request.form.get(CSRF_FORM_FIELD) or request.headers.get(CSRF_HEADER) or ""
+        if expected and supplied and _safe_equals(supplied, expected):
+            return None
+        logger.warning("Rejected %s %s: missing or invalid CSRF token", request.method, request.path)
+        if CSRF_HEADER in request.headers:
+            return jsonify({"ok": False, "message": g.t("error.csrf")}), 400
+        return make_response(g.t("error.csrf"), 400, {"Content-Type": "text/plain; charset=utf-8"})
+
+    @app.context_processor
+    def inject_csrf():
+        return {"csrf_token": _csrf_token}
 
     @app.context_processor
     def inject_i18n():
@@ -106,7 +193,7 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
 
     @app.get("/lang/<code>")
     def set_language(code: str):
-        target = request.args.get("next") or url_for("index")
+        target = _safe_next(request.args.get("next"))
         response = make_response(redirect(target))
         if code in LANGUAGES:
             response.set_cookie(LANG_COOKIE, code, max_age=LANG_COOKIE_MAX_AGE, samesite="Lax")
@@ -164,7 +251,13 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
         if request.method == "POST":
             username = request.form.get("username", "")
             password = request.form.get("password", "")
+            blocked_for = login_throttle.retry_after(_client_key())
+            if blocked_for:
+                response = make_response(render_template("login.html", error=_throttled_message(blocked_for)), 429)
+                response.headers["Retry-After"] = str(blocked_for)
+                return response
             if _check_webui_credentials(cfg, username, password):
+                login_throttle.reset(_client_key())
                 session.clear()
                 if cfg.get("totp_enabled"):
                     # Username/password alone aren't enough - hold off on
@@ -177,6 +270,7 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
                 session["logged_in"] = True
                 session.permanent = True
                 return redirect(url_for("index"))
+            login_throttle.record_failure(_client_key())
             error = g.t("login.error")
         return render_template("login.html", error=error)
 
@@ -188,11 +282,19 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
         error = None
         if request.method == "POST":
             code = request.form.get("code", "")
+            blocked_for = _totp_retry_after()
+            if blocked_for:
+                response = make_response(render_template("login_2fa.html", error=_throttled_message(blocked_for)), 429)
+                response.headers["Retry-After"] = str(blocked_for)
+                return response
             if _verify_totp_or_recovery(service, code):
+                totp_throttle.reset(_client_key())
                 session.pop("awaiting_2fa", None)
                 session["logged_in"] = True
                 session.permanent = True
                 return redirect(url_for("index"))
+            totp_throttle.record_failure(_client_key())
+            totp_global_throttle.record_failure("*")
             error = g.t("login2fa.error")
         return render_template("login_2fa.html", error=error)
 
@@ -305,7 +407,19 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
             username = request.form.get("username", "").strip()
             password = request.form.get("password", "")
             password2 = request.form.get("password2", "")
-            if password or password2:
+            current_password = request.form.get("current_password", "")
+            # Changing the login requires the CURRENT password again - an open
+            # session alone (left unlocked, or hijacked) must not be enough
+            # to take over the account.
+            blocked_for = login_throttle.retry_after(_client_key())
+            if blocked_for:
+                return _render_settings(cfg, webui_error=_throttled_message(blocked_for)), 429
+            if not _check_webui_credentials(cfg, cfg.get("webui_username", ""), current_password):
+                login_throttle.record_failure(_client_key())
+                error = g.t("settings.webui_error_current")
+            else:
+                login_throttle.reset(_client_key())
+            if not error and (password or password2):
                 if password != password2:
                     error = g.t("settings.webui_error_mismatch")
                 elif len(password) < 8:
@@ -423,7 +537,11 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
         if not cfg.get("totp_enabled"):
             return redirect(url_for("settings"))
         code = request.form.get("code", "")
+        blocked_for = _totp_retry_after()
+        if blocked_for:
+            return _render_settings(cfg, totp_error=_throttled_message(blocked_for)), 429
         if _verify_totp_or_recovery(service, code):
+            totp_throttle.reset(_client_key())
             cfg = service.config
             cfg["totp_enabled"] = False
             cfg["totp_secret"] = ""
@@ -431,6 +549,8 @@ def create_app(service: DDNSService, https_manager: HttpsServerManager) -> Flask
             config_module.save_config(cfg)
             service.reload_config()
             return _render_settings(cfg, totp_saved=True)
+        totp_throttle.record_failure(_client_key())
+        totp_global_throttle.record_failure("*")
         return _render_settings(cfg, totp_error=g.t("settings.totp_error_invalid_code"))
 
     @app.post("/settings/2fa/recovery/regenerate")
